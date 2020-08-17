@@ -226,7 +226,7 @@ if issurface||ismatrix||ismember(secondlevelanalyses,[1 3]) % nonparametric stat
         xyz=[n2+zeros(1,size(xyz0,2)); xyz0; ones(1,size(xyz0,2))];
         y=spm_get_data(SPM.xY.VY(:)',xyz);
         maskthis=~any(isnan(y),1)&any(diff(y,1,1)~=0,1);
-        if ~isempty(maskfile), maskthis=maskthis&spm_get_data(vmaskfile,pinv(vmaskfile.mat)*SPM.xY.VY(1).mat*xyz)>0; end
+        if ~isempty(maskfile), maskthis=maskthis&all(spm_get_data(vmaskfile,pinv(vmaskfile(1).mat)*SPM.xY.VY(1).mat*xyz)>0,1); end
         mask(n2,:,:)=reshape(maskthis,[1 SPM.xY.VY(1).dim(2:3)]);
         if any(maskthis)
             y=reshape(y,size(SPM.xY.VY,1),size(SPM.xY.VY,2),SPM.xY.VY(1).dim(2),SPM.xY.VY(1).dim(3));
@@ -243,6 +243,11 @@ if issurface||ismatrix||ismember(secondlevelanalyses,[1 3]) % nonparametric stat
         end
     end
     if ~donefirst, error('Please check your data: There are no inmask voxels'); end
+    if size(SPM.xX_multivariate.F,1)==1&&size(SPM.xX_multivariate.F,2)==1
+        V=struct('mat',SPM.xY.VY(1).mat,'dim',SPM.xY.VY(1).dim,'fname','spmF_mv.nii','pinfo',[1;0;0],'n',[1,1],'dt',[spm_type('float32') spm_platform('bigend')]);
+        V=spm_write_vol(V,shiftdim(SPM.xX_multivariate.F,2));
+        try, spm_jsonwrite('spmF_mv.json',struct('dof',SPM.xX_multivariate.dof(:)','statsname',SPM.xX_multivariate.statsname)); end
+    end
 end
 if issurface||ismatrix % surface- or matrix- based analyses
     V=struct('mat',SPM.xY.VY(1).mat,'dim',SPM.xY.VY(1).dim,'fname','mask.nii','pinfo',[1;0;0],'n',[1,1],'dt',[spm_type('uint8') spm_platform('bigend')]);
@@ -264,7 +269,7 @@ elseif ismember(secondlevelanalyses,[1 2]) % volume-based parametric stats
                 xyz=[n2+zeros(1,size(xyz0,2)); xyz0; ones(1,size(xyz0,2))];
                 y=spm_get_data(SPM.xY.VY(:)',xyz);
                 maskthis=~any(isnan(y),1)&any(diff(y,1,1)~=0,1);
-                if ~isempty(maskfile), maskthis=maskthis&spm_get_data(vmaskfile,pinv(vmaskfile.mat)*SPM.xY.VY(1).mat*xyz)>0; end
+                if ~isempty(maskfile), maskthis=maskthis&all(spm_get_data(vmaskfile,pinv(vmaskfile(1).mat)*SPM.xY.VY(1).mat*xyz)>0,1); end
                 mask(n2,:,:)=reshape(maskthis,[1 SPM.xY.VY(1).dim(2:3)]);
             end
         end

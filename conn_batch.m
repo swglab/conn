@@ -277,9 +277,11 @@ function varargout=conn_batch(varargin)
 %                                                                   displacement and global signal changes)
 %                        'functional_bandpass'                   : functional band-pass filtering
 %                        'functional_center'                     : centers functional data to origin (0,0,0) coordinates
+%                        'functional_continue'                   : subsequent preprocessing steps will use selected secondary dataset as source
+%                                                                   of functional data (see also Setup.preprocessing.sets)
 %                        'functional_coregister_affine'          : functional affine coregistration to structural volumes
 %                        'functional_coregister_nonlinear'       : functional non-linear coregistration to structural volumes
-%                        'functional_label'                      : labels current functional files as part of list of Secondary Datasets
+%                        'functional_label'                      : labels current functional files (in list of Secondary Datasets)
 %                        'functional_manualorient'               : applies user-defined affine transformation to functional data
 %                        'functional_manualspatialdef'           : applies user-defined spatial deformation to functional data
 %                        'functional_motionmask'                 : creates functional motion masks (mean BOLD signal spatial 
@@ -356,12 +358,18 @@ function varargout=conn_batch(varargin)
 %      bp_filter       : (functional_bandpass) Low- and High- frequency thresholds (in Hz)
 %      bp_keep0        : (functional_bandpass) 0: removes average BOLD signal (freq=0Hz component); 1: keeps average BOLD signal in output 
 %                           independent of band-pass filter values; [1]
+%      continue        : (functional_continue) label of secondary dataset (note: the following functional step names do not require an 
+%                           explicit continue field: 'functional_continue_as_original', 'functional_continue_as_subjectspace', 
+%                           'functional_continue_as_mnispace', 'functional_continue_as_surfacespace', 'functional_continue_as_smoothed')
 %      coregtomean     : (functional_coregister/segment/normalize) 0: use first volume; 1: use mean volume (computed during 
 %                         realignment); 2: use user-defined source volume (see Setup.coregsource_functionals field) [1]
 %      diffusionsteps  : (surface_smooth) number of diffusion steps
 %      fwhm            : (functional_smooth) Smoothing factor (mm) [8]
 %      interp          : (normalization) target voxel interpolation method (0:nearest neighbor; 1:trilinear; 2 or higher:n-order spline) [4]
-%      label           : (functional_label) label of secondary dataset [datestr(now)]
+%      label           : (functional_label) label of secondary dataset (note: the following functional step names do not require an 
+%                           explicit label field: 'functional_continue_as_original', 'functional_continue_as_subjectspace', 
+%                           'functional_continue_as_mnispace', 'functional_continue_as_surfacespace', 'functional_continue_as_smoothed')
+%      continue        : (functional_label) label of secondary dataset
 %      reg_names       : (functional_regression) list of first-level covariates to use as model regressors / design matrix (valid entries are 
 %                           first-level covariate names or ROI names)
 %      reg_dimensions  : (functional_regression) list of maximum number of dimensions (one vlaue for each model regressor in reg_names)
@@ -388,8 +396,8 @@ function varargout=conn_batch(varargin)
 %                         [spm/template/T1.nii]
 %      template_functional: (functional_normalize SPM8 only) functional template file for normalization 
 %                         [spm/template/EPI.nii]
-%      tpm_template    : (structural_segment, structural_segment&normalize in SPM8, and any segment/normalize option 
-%                         in SPM12) tissue probability map [spm/tpm/TPM.nii]
+%      tpm_template    : (any segment/normalize option in SPM12) tissue probability map [spm/tpm/TPM.nii]
+%                         alternatively, location of subject-specific TPM files (secondary functional dataset number or name ['tpm'])
 %      tpm_ngaus       : (structural_segment, structural_segment&normalize in SPM8&SPM12) number of gaussians for each 
 %                         tissue probability map
 %      vdm_et1         : (functional_vdm_create) ET1 (Echo Time first echo in fieldmap sequence) (default [] : read from .json file / BIDS)
@@ -403,6 +411,7 @@ function varargout=conn_batch(varargin)
 %      voxelsize_anat  : (structural normalization) target voxel size for resliced volumes (mm) [1]
 %      voxelsize_func  : (functional normalization) target voxel size for resliced volumes (mm) [2]
 %      sets            : defines functional dataset to preprocess (0 for Primary Dataset; [1-N] or labels for Secondary Datasets) [0]
+%                           (note: this may be modified later by functional_continue or functional_continue_as_* preprocessinig steps)
 %  
 %  
 % BATCH.Denoising PERFORMS DENOISING STEPS (confound removal & filtering) %!
@@ -606,6 +615,7 @@ function varargout=conn_batch(varargin)
 
 global CONN_x;
 varargout={};
+if ~nargin, help(mfilename); return; end
 
 if nargin==1&&~ischar(varargin{1}), batch=varargin{1}; %batch(BATCH) syntax
 elseif nargin==1&&ischar(varargin{1}), 
@@ -1154,6 +1164,8 @@ if isfield(batch,'Setup'),
             nsub=SUBJECTS(isub);
             for nl1covariates=1:length(batch.Setup.covariates.files),
                 for nses=1:CONN_x.Setup.nsessions(nsub),
+                    if ~iscell(batch.Setup.covariates.files{nl1covariates}), batch.Setup.covariates.files{nl1covariates}={batch.Setup.covariates.files{nl1covariates}}; end
+                    if ~iscell(batch.Setup.covariates.files{nl1covariates}{isub}), batch.Setup.covariates.files{nl1covariates}{isub}={batch.Setup.covariates.files{nl1covariates}{isub}}; end
                     CONN_x.Setup.l1covariates.files{nsub}{nl0+nl1covariates}{nses}=conn_file(batch.Setup.covariates.files{nl1covariates}{isub}{nses});
                 end
             end
@@ -1739,18 +1751,18 @@ if isfield(batch,'Results'),
             end
             
             if isvv
-                if ~isfield(batch.Results,'between_sources')||isempty(batch.Results.between_sources),
+                if ~isfield(batch.Results,'between_measures')||isempty(batch.Results.between_measures),
                     if 1,%isfield(batch.Results,'done')&&batch.Results.done
                         clear batchtemp;
                         if isfield(batch,'filename'), batchtemp.filename=batch.filename; else, batchtemp.filename=CONN_x.filename; end
-                        batchtemp.vvResults=batch.Results;
+                        batchtemp.Results=batch.Results;
                         for nmeasure=1:length(CONN_x.vvAnalyses(CONN_x.vvAnalysis).measures),
-                            batchtemp.vvResults.between_measures.effect_names=conn_v2v('cleartext',CONN_x.vvAnalyses(CONN_x.vvAnalysis).measures(nmeasure));
-                            batchtemp.vvResults.between_measures.contrast=[1];
+                            batchtemp.Results.between_measures.effect_names=conn_v2v('cleartext',CONN_x.vvAnalyses(CONN_x.vvAnalysis).measures(nmeasure));
+                            batchtemp.Results.between_measures.contrast=[1];
                             conn_batch(batchtemp);
                         end
                     end
-                elseif isfield(batch.Results,'between_sources'),
+                elseif isfield(batch.Results,'between_measures'),
                     CONN_x.Results.xX.nmeasures=zeros(1,length(batch.Results.between_measures.effect_names));
                     CONN_x.Results.xX.nmeasuresbyname=cell(1,length(batch.Results.between_measures.effect_names));
                     for neffect=1:length(batch.Results.between_measures.effect_names),

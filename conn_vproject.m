@@ -9,7 +9,10 @@ if isempty(CONN_gui)||~isfield(CONN_gui,'font_offset'), conn_font_init; end
 if numel(param)==1 && ishandle(param), % callbacks from UI objects
     init=0;
     doredraw=false;
-    GCF=gcbf; if isempty(GCF), GCF=gcf; end
+    if ishandle(param)&&isequal(get(param,'type'),'figure'), GCF=param;
+    else GCF=gcbf; 
+    end
+    if isempty(GCF), GCF=gcf; end
     if isstruct(nonparam), ARG=nonparam; end;
 	OPTION=views; 
     if nargin>3, OPTION2=projection; else OPTION2=''; end
@@ -319,7 +322,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 end
                 return;
                 
-            case {'surface_view','surface_print','surface_gui_print'}
+            case {'surface_view','surface_print','surface_gui_print','default_print'}
                 if ~isempty(OPTION2), options={OPTION2,'-nogui'};
                 else options={};
                 end

@@ -480,10 +480,10 @@ if nargin<1,
                                     'bordertype','round',...
 									'callback',{{@conn,'gui_analyses_done_dyn'}} );
 	CONN_h.menus.m_results_03a=conn_menumanager([], 'n',3,...
-									'string',{'Spatial analyses','Temporal analyses','Summary'},...
+									'string',{'Spatial components','Temporal components','Summary'},...
 									'help',{'Define/explore second-level analyses of dyn-ICA spatial components (circuits)','Define/explore second-level analyses of dyn_ICA temporal components (connectivity-modulation timeseries)','Summary display of dyn-ICA analyses'},...
                                     'order','horizontal',...
-									'position',[.65,.91,3*.09,.04],...
+									'position',[.0,.0,3*.10,.045],...
 									'state',[1,0,0],...
 									'value',1,...
                                     'toggle',1,...
@@ -492,10 +492,10 @@ if nargin<1,
                                     'bordertype','square',...
 									'callback',{{@conn,'gui_results_dyn'},{@conn,'gui_results_dyn'},{@conn,'gui_results_dyn'}} );
 	CONN_h.menus.m_results_03b=conn_menumanager([], 'n',3,...
-									'string',{'Spatial analyses','Temporal analyses','Summary'},...
+									'string',{'Spatial components','Temporal components','Summary'},...
 									'help',{'Define/explore second-level analyses of ICA spatial components (networks)','Define/explore second-level analyses of ICA temporal components (network timeseries)','Summary display of Independent Component analyses'},...
                                     'order','horizontal',...
-									'position',[.65,.91,3*.09,.04],...
+									'position',[.0,.0,3*.10,.045],...
 									'state',[1,0,0],...
 									'value',1,...
                                     'toggle',1,...
@@ -504,10 +504,10 @@ if nargin<1,
                                     'bordertype','square',...
 									'callback',{{@conn,'gui_results_ica'},{@conn,'gui_results_ica'},{@conn,'gui_results_ica'}} );
 	CONN_h.menus.m_results_03c=conn_menumanager([], 'n',2,...
-									'string',{'Analyses','Summary'},...
-									'help',{'Define/explore second-level analyses of multivariate correlation (MCOR) maps','Summary display of MCOR components'},...
+									'string',{'Group-analyses','Summary'},...
+									'help',{'Define/explore second-level analyses of multivoxel connectivity patterns','Summary display of multivoxel components'},...
                                     'order','horizontal',...
-									'position',[.70,.91,2*.09,.04],...
+									'position',[.0,.0,2*.15,.045],...
 									'state',[1,0],...
 									'value',1,...
                                     'toggle',1,...
@@ -665,7 +665,7 @@ else
                 'pobj',conn_projectmanager('null'),...
                 'folders',struct('rois',fullfile(fileparts(which(mfilename)),'rois'),'data',[],'bids',[],'preprocessing',[],'qa',[],'firstlevel',[],'firstlevel_vv',[],'firstlevel_dyn',[],'secondlevel',[]),...
                 'Setup',struct(...
-                 'RT',nan,'nsubjects',1,'nsessions',1,'fwhm',12,'reorient',eye(4),'normalized',1,...
+                 'RT',nan,'nsubjects',1,'nsessions',1,'reorient',eye(4),'normalized',1,...
                  'functional',{{}},...
                  'structural',{{}},...
                  'structural_sessionspecific',0,...
@@ -734,6 +734,7 @@ else
             
             if strcmpi(varargin{1},'initfromgui'), CONN_x.Setup.RT=2; end % backward compatibility (might be removed at some point to new NaN value default)
             CONN_x.Setup.functional{1}{1}={[],[],[]};
+            CONN_x.Setup.structural{1}{1}={[],[],[]};
             CONN_x.Setup.nscans{1}{1}=0;
             CONN_x.Setup.spm{1}={[],[],[]};
             CONN_x.Setup.dicom{1}={[],[],[]};;
@@ -760,10 +761,8 @@ else
             CONN_x.Setup.rois.regresscovariates=[0,1,1];
             CONN_x.Setup.rois.unsmoothedvolumes=[1,1,1];
             CONN_x.Setup.rois.weighted=[0,0,0];
-            filename=fullfile(fileparts(which('conn')),'utils','surf','referenceT1_icbm.nii');
-            CONN_x.Setup.structural{1}{1}=conn_file(filename);
-            %filename=fullfile(fileparts(which('conn')),'utils','surf','referenceT1_icbm.nii');
-            filename=fullfile(fileparts(which('conn')),'utils','surf','referenceT1_trans.nii');
+            %if strcmpi(varargin{1},'initfromgui'), CONN_x.Setup.structural{1}{1}=conn_file(fullfile(fileparts(which('conn')),'utils','surf','referenceT1_icbm.nii')); end
+            filename=fullfile(fileparts(which('conn')),'utils','surf','referenceT1_trans.nii'); %filename=fullfile(fileparts(which('conn')),'utils','surf','referenceT1_icbm.nii');
             V=spm_vol(filename);
             CONN_gui.refs.canonical=struct('filename',filename,'V',V,'data',spm_read_vols(V));
             [x,y,z]=ndgrid(1:CONN_gui.refs.canonical.V.dim(1),1:CONN_gui.refs.canonical.V.dim(2),1:CONN_gui.refs.canonical.V.dim(3));
@@ -1509,15 +1508,18 @@ else
             % e.g. 
             % conn('submit',@myfile); %conn submit run /data/myfile.m
             % conn jobmanager all
+            % note: h=conn('submit',...) returns without wait
+            %
             if nargout>0, [varargout{1:nargout}]=conn_jobmanager('submit','orphan_fcn',[],1,[],varargin{2:end}); % note: will call conn_process('fcn',varargin{2:end}) on remote node as orphan process (unrelated to any CONN project)
-            else h=conn_jobmanager('submit','orphan_fcn',[],1,[],varargin{2:end});
+            else conn_jobmanager('submit','orphan_fcn',[],1,[],varargin{2:end});
             end
-        case {'submit_spmbatch'} 
+        case {'submit_spmbatch','submit_spm'} 
             % e.g. 
             % conn('submit_spmbatch',spmbatch);
             % conn jobmanager all
+            % note: h=conn('submit_spmbatch',...) returns without wait
             if nargout>0, [varargout{1:nargout}]=conn_jobmanager('submit','orphan_spmbatch',[],1,[],varargin{2:end}); % note: will call conn_process('spmbatch',varargin{2:end}) on remote node as orphan process (unrelated to any CONN project)
-            else h=conn_jobmanager('submit','orphan_spmbatch',[],1,[],varargin{2:end});
+            else conn_jobmanager('submit','orphan_spmbatch',[],1,[],varargin{2:end});
             end
             
 
@@ -8994,17 +8996,17 @@ else
                 switch(state)
                     case 1, %if ok, conn_menumanager([CONN_h.menus.m_results_04,CONN_h.menus.m_results_04b],'on',1); end
                         %if ok, conn_menumanager([CONN_h.menus.m_results_04b],'on',1); end
-                        if stateb, conn_menumanager(CONN_h.menus.m_results_03a,'on',1); end
+                        if stateb, conn_menumanager(CONN_h.menus.m_results_03a,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); end
                         dp2=.27;dp3=.05;
                     case 2, %if ok, conn_menumanager([CONN_h.menus.m_results_05],'on',1); end
                         dp2=0;dp3=.05;
                     case 3, %if ok, conn_menumanager([CONN_h.menus.m_results_06],'on',1); end
-                        if stateb, conn_menumanager(CONN_h.menus.m_results_03b,'on',1); end
-                        if statec, conn_menumanager(CONN_h.menus.m_results_03c,'on',1); end
+                        if stateb, conn_menumanager(CONN_h.menus.m_results_03b,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); end
+                        if statec, conn_menumanager(CONN_h.menus.m_results_03c,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); end
                         dp2=0;
-                    case 4, conn_menumanager(CONN_h.menus.m_results_03b,'on',1);
-                    case 5, conn_menumanager(CONN_h.menus.m_results_03a,'on',1);
-                    case 6, conn_menumanager(CONN_h.menus.m_results_03c,'on',1);
+                    case 4, conn_menumanager(CONN_h.menus.m_results_03b,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); 
+                    case 5, conn_menumanager(CONN_h.menus.m_results_03a,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); 
+                    case 6, conn_menumanager(CONN_h.menus.m_results_03c,'on',1); conn_menu('frame2border',[.0,0,.3,.045],''); 
                 end
                 if CONN_h.menus.m_results.usetablewhite==0, dp1=dp1+.10; end
                 if state==1,
@@ -9189,8 +9191,8 @@ else
                         CONN_h.menus.m_results_00{21}=[];
                     end 
                     
-                    CONN_h.menus.m_results_00{56}=conn_menu('popupwhite',boffset+[-.015,.76,.56,.035],'',{' '},'<HTML>choose analysis measure<br/> - these choices are automatically generated from your list of conditions. <br/> - to select other combinations, manually select the condition(s) of interest in the <i>conditions</i> list, <br/> and define below the desired between-conditions contrast</HTML>','conn(''gui_results'',56);');
-                    CONN_h.menus.m_results_00{57}=conn_menu('popupwhite',boffset+[-.015,.73,.56,.035],'',{' '},'<HTML>choose analysis description<br/> - these choices are automatically generated from your list of 2nd-level covariates.<br/> - create new 2nd-level covariates for additional analyses (e.g. add interaction terms between existing covariates)<br/> - to select other combinations, manually select the subject-effecct(s) of interest in the <i>subject-effects</i> list below, <br/> and define below the desired between-subjects contrast</HTML>','conn(''gui_results'',57);');
+                    CONN_h.menus.m_results_00{56}=conn_menu('popupwhite',boffset+[-.015,.76,.56,.035],'',{' '},'<HTML>choose analysis measure<br/> - these choices are automatically generated from your list of conditions. <br/> - to select other combinations not present in this list, manually select the condition(s) of interest <br/>in the <i>conditions</i> list below, and define there the desired between-conditions contrast</HTML>','conn(''gui_results'',56);');
+                    CONN_h.menus.m_results_00{57}=conn_menu('popupwhite',boffset+[-.015,.73,.56,.035],'',{' '},'<HTML>choose analysis description<br/> - these choices are automatically generated from your list of 2nd-level covariates. Please create new 2nd-level covariates <br/> for additional analyses (e.g. by adding new covariates or adding interaction terms between existing covariates)<br/> - to select other combinations not present in this list, manually select the subject-effecct(s) of interest in <br/>the <i>subject-effects</i> list below, and define there the desired between-subjects contrast</HTML>','conn(''gui_results'',57);');
                     CONN_h.menus.m_results_00{58}=conn_menu('popupwhite',boffset+[-.015,.70,.56,.035],'',{' '},['<HTML>choose control covariates<br/> - To select other arbitrary control covariates, choose first the desired analysis description above, and then use ',CONN_gui.keymodifier,'-click in the <br/> <i>subject-effects</i> list below to add any additional control covariates</HTML>'],'conn(''gui_results'',58);');
                     %set([CONN_h.menus.m_results_00{56},CONN_h.menus.m_results_00{57},CONN_h.menus.m_results_00{58}],'fontweight','bold');
                     set(CONN_h.menus.m_results_00{58},'horizontalalignment','left');%,'fontsize',5+CONN_gui.font_offset);
@@ -9298,8 +9300,8 @@ else
                             conn_menumanager('onregion',CONN_h.menus.m_results_00{37},1,boffset+pos+[0 0 .015 0]);
                         end
                         %conn_menu('frame2noborder',boffset+[-.005,.085,.565,.135],'');
-                        if CONN_h.menus.m_results.usetablewhite, [CONN_h.menus.m_results_00{18},CONN_h.menus.m_results_00{22}]=conn_menu('listbox0',boffset+[.005,.05,.550,.06],sprintf('%-60s%10s%10s%12s%12s','Targets','beta','T','p-unc','p-FDR'),'   ','browse target ROIs -or right click for more options-','conn(''gui_results'',18);');
-                        else [CONN_h.menus.m_results_00{18},CONN_h.menus.m_results_00{22}]=conn_menu('listbox0',boffset+[.005,.05,.550,.10],sprintf('%-60s%10s%10s%12s%12s','Targets','beta','T','p-unc','p-FDR'),'   ','browse target ROIs -or right click for more options-','conn(''gui_results'',18);');
+                        if CONN_h.menus.m_results.usetablewhite, [CONN_h.menus.m_results_00{18},CONN_h.menus.m_results_00{22}]=conn_menu('listbox0',boffset+[.005,.06,.550,.05],sprintf('%-60s%10s%10s%12s%12s','Targets','beta','T','p-unc','p-FDR'),'   ','browse target ROIs -or right click for more options-','conn(''gui_results'',18);');
+                        else [CONN_h.menus.m_results_00{18},CONN_h.menus.m_results_00{22}]=conn_menu('listbox0',boffset+[.005,.06,.550,.09],sprintf('%-60s%10s%10s%12s%12s','Targets','beta','T','p-unc','p-FDR'),'   ','browse target ROIs -or right click for more options-','conn(''gui_results'',18);');
                         end
                         set(CONN_h.menus.m_results_00{18},'max',2,'fontname','monospaced','fontsize',8+CONN_gui.font_offset);
                         set(CONN_h.menus.m_results_00{22},'fontsize',8+CONN_gui.font_offset);
@@ -9309,9 +9311,9 @@ else
                         if ~isfield(CONN_x.Results.xX,'inferencelevel'), CONN_x.Results.xX.inferencelevel=.05; end
                         if ~isfield(CONN_x.Results.xX,'inferenceleveltype'), CONN_x.Results.xX.inferenceleveltype=1; end
                         if ~isfield(CONN_x.Results.xX,'displayrois'), CONN_x.Results.xX.displayrois=2; end
-                        strstr3={'<HTML>Group-analysis results <small>(from disk)</small></HTML>','<HTML>Seed/Source parameters <small>(preview of current settings)</small></HTML>'};
+                        strstr3={'<HTML>Group-analysis results <small>(from disk)</small></HTML>','<HTML>Seed-based parameters <small>(preview of current settings)</small></HTML>'};
                         if stateb, strstr3=strstr3(1); end
-                        CONN_h.menus.m_results_00{32}=conn_menu('popup2big',boffset+[pos(1)+.10,pos(2)+pos(4)+.01,.25,.045],'',strstr3,'<HTML>Select <i>''Group-analysis results (from disk)''</i> to display the results of this group-level analysis (as stored the last time this group-analysis was computed across the entire RRC matrix)<br/>Select <i>''Seed/Source parameters (preview of current settings)''</i> to display a preview of the results of this group-level analysis for the selected seed/source ROI only, and adapting in real time to the options selected in the ''group-analysis settings'' tab</HTML>','conn(''gui_results'',32);');
+                        CONN_h.menus.m_results_00{32}=conn_menu('popup2big',boffset+[pos(1)+.10,pos(2)+pos(4)+.01,.25,.045],'',strstr3,'<HTML>Select <i>''Group-analysis results (from disk)''</i> to display the results of this group-level analysis (as stored the last time this group-analysis was computed across the entire RRC matrix)<br/>Select <i>''Seed-based parameters (preview of current settings)''</i> to display a preview of the results of this group-level analysis for the selected seed/source ROI only, and adapting in real time to the options selected in the ''group-analysis settings'' tab</HTML>','conn(''gui_results'',32);');
                         CONN_x.Results.xX.displayvoxels=max(1,min(numel(strstr3), CONN_x.Results.xX.displayvoxels));
                         set(CONN_h.menus.m_results_00{32},'value',CONN_x.Results.xX.displayvoxels);
                         
@@ -9345,7 +9347,8 @@ else
                         %CONN_h.menus.m_results_00{31}=uicontrol('style','popupmenu','units','norm','position',boffset+[.66,.77,.23,.045],'string',strstr3,'fontsize',8+CONN_gui.font_offset,'value',CONN_x.Results.xX.displayrois,'backgroundcolor',CONN_gui.backgroundcolorA,'foregroundcolor',[0 0 0]+.4+.2*(mean(CONN_gui.backgroundcolorA)<.5),'tooltipstring','choose target ROIs','callback','conn(''gui_results'',31);');
                         CONN_h.menus.m_results_00{49}=conn_menu('imagep2',boffset+pos+[.05 .01 -.10 -.04]);
                         set(CONN_h.menus.m_results_00{49}.h10,'tooltipstring','<HTML>connection-level false positive threshold<br/> - note: displaying uncorrected results; click on ''display results'' below for multiple-comparison corrections</HTML>')
-                        CONN_h.menus.m_results_00{24}=uicontrol('style','text','units','norm','position',boffset+[pos(1)+pos(3)/2-.15,pos(2)-1*.045,.15,.04],'string','p-uncorrected <','fontname','default','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',CONN_gui.fontcolorA,'horizontalalignment','right','parent',CONN_h.screen.hfig);
+                        CONN_h.menus.m_results_00{24}=[];%uicontrol('style','text','units','norm','position',boffset+[pos(1)+pos(3)/2-.15,pos(2)-1*.045,.15,.04],'string','p-uncorrected <','fontname','default','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',CONN_gui.fontcolorA,'horizontalalignment','right','parent',CONN_h.screen.hfig);
+                        conn_menumanager('onregionremove',CONN_h.menus.m_results_00{49}.h10);set([CONN_h.menus.m_results_00{49}.h10],'visible','off');
                         CONN_h.menus.m_results_00{25}=conn_menu('axes',boffset+pos);
                         %h0=CONN_gui.backgroundcolorA;
                         if 0
@@ -10785,32 +10788,40 @@ else
                                 %disp(resultsfolder);
                                 p=[];h=[];F=[];statsname=[];dof=[];
                                 CONN_h.menus.m_results.design.pwd=resultsfolder;
-                                if conn_existfile(fullfile(resultsfolder,'SPM.mat'))
+                                if conn_existfile(fullfile(resultsfolder,'spmF_mv.nii')), 
+                                    tvol=spm_vol(fullfile(resultsfolder,'spmF_mv.nii'));
+                                    [tx,ty,tz]=ndgrid(1:CONN_h.menus.m_results.Y(1).dim(1),1:CONN_h.menus.m_results.Y(1).dim(2),1:CONN_h.menus.m_results.Y(1).dim(3)); txyz=[tx(:) ty(:) tz(:) ones(numel(tx),1)]';
+                                    SPM.xX_multivariate.F=reshape(spm_get_data(tvol,pinv(tvol(1).mat)*CONN_h.menus.m_results.Y(1).mat*txyz),[1,1,CONN_h.menus.m_results.Y(1).dim]);
+                                    SPM.xX_multivariate.h=SPM.xX_multivariate.F;
+                                    info=conn_jsonread(fullfile(resultsfolder,'spmF_mv.json'));
+                                    SPM.xX_multivariate.statsname=info.statsname;
+                                    SPM.xX_multivariate.dof=info.dof;
+                                elseif conn_existfile(fullfile(resultsfolder,'SPM.mat'))
                                     load(fullfile(resultsfolder,'SPM.mat'),'SPM');
-                                    try
-                                        dof=SPM.xX_multivariate.dof;
-                                        statsname=SPM.xX_multivariate.statsname;
-                                        if conn_surf_dimscheck(CONN_h.menus.m_results.Y(1).dim), %if isequal(CONN_h.menus.m_results.Y(1).dim,conn_surf_dims(8).*[1 1 2])
-                                            if CONN_h.menus.m_results_surfhires
-                                                h=reshape(SPM.xX_multivariate.h,1,[]);
-                                                F=reshape(SPM.xX_multivariate.F,1,[]);
-                                            else
-                                                h=reshape(SPM.xX_multivariate.h(:,:,:,:,[1,conn_surf_dims(8)*[0;0;1]+1]),1,[]);
-                                                F=reshape(SPM.xX_multivariate.F(:,:,:,:,[1,conn_surf_dims(8)*[0;0;1]+1]),1,[]);
-                                            end
+                                end
+                                try
+                                    dof=SPM.xX_multivariate.dof;
+                                    statsname=SPM.xX_multivariate.statsname;
+                                    if conn_surf_dimscheck(CONN_h.menus.m_results.Y(1).dim), %if isequal(CONN_h.menus.m_results.Y(1).dim,conn_surf_dims(8).*[1 1 2])
+                                        if CONN_h.menus.m_results_surfhires
+                                            h=reshape(SPM.xX_multivariate.h,1,[]);
+                                            F=reshape(SPM.xX_multivariate.F,1,[]);
                                         else
-                                            if ~isfield(CONN_h.menus.m_results.y,'slice')||CONN_h.menus.m_results.y.slice<1||CONN_h.menus.m_results.y.slice>CONN_h.menus.m_results.Y(1).dim(3), CONN_h.menus.m_results.y.slice=ceil(CONN_h.menus.m_results.Y(1).dim(3)/2); end
-                                            %set(CONN_h.menus.m_results_00{15},'min',1,'max',CONN_h.menus.m_results.Y(1).dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_results.Y(1).dim(3)-1)),'value',CONN_h.menus.m_results.y.slice);
-                                            h=reshape(SPM.xX_multivariate.h(:,:,:,:,CONN_h.menus.m_results.y.slice),1,[]);
-                                            F=reshape(SPM.xX_multivariate.F(:,:,:,:,CONN_h.menus.m_results.y.slice),1,[]);
+                                            h=reshape(SPM.xX_multivariate.h(:,:,:,:,[1,conn_surf_dims(8)*[0;0;1]+1]),1,[]);
+                                            F=reshape(SPM.xX_multivariate.F(:,:,:,:,[1,conn_surf_dims(8)*[0;0;1]+1]),1,[]);
                                         end
-                                        p=nan+zeros(size(F));idxvalid=find(~isnan(F));
-                                        if ~isempty(idxvalid)
-                                            switch(statsname),
-                                                case 'T', p(idxvalid)=1-spm_Tcdf(F(idxvalid),dof(end));
-                                                case 'F', p(idxvalid)=1-spm_Fcdf(F(idxvalid),dof(1),dof(2));
-                                                case 'X', p(idxvalid)=1-spm_Xcdf(F(idxvalid),dof);
-                                            end
+                                    else
+                                        if ~isfield(CONN_h.menus.m_results.y,'slice')||CONN_h.menus.m_results.y.slice<1||CONN_h.menus.m_results.y.slice>CONN_h.menus.m_results.Y(1).dim(3), CONN_h.menus.m_results.y.slice=ceil(CONN_h.menus.m_results.Y(1).dim(3)/2); end
+                                        %set(CONN_h.menus.m_results_00{15},'min',1,'max',CONN_h.menus.m_results.Y(1).dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_results.Y(1).dim(3)-1)),'value',CONN_h.menus.m_results.y.slice);
+                                        h=reshape(SPM.xX_multivariate.h(:,:,:,:,CONN_h.menus.m_results.y.slice),1,[]);
+                                        F=reshape(SPM.xX_multivariate.F(:,:,:,:,CONN_h.menus.m_results.y.slice),1,[]);
+                                    end
+                                    p=nan+zeros(size(F));idxvalid=find(~isnan(F)&F~=0);
+                                    if ~isempty(idxvalid)
+                                        switch(statsname),
+                                            case 'T', p(idxvalid)=1-spm_Tcdf(F(idxvalid),dof(end));
+                                            case 'F', p(idxvalid)=1-spm_Fcdf(F(idxvalid),dof(1),dof(2));
+                                            case 'X', p(idxvalid)=1-spm_Xcdf(F(idxvalid),dof);
                                         end
                                     end
                                 end
@@ -10882,8 +10893,15 @@ else
                                     conn_menu('update',CONN_h.menus.m_results_00{29},[]);
                                 end
                                 set(CONN_h.menus.m_results_00{46},'string','display results');
-                                set([CONN_h.menus.m_results_00{24}],'visible','on');
+                                if CONN_x.Results.xX.displayvoxels==1, set([CONN_h.menus.m_results_00{24},CONN_h.menus.m_results_00{14}.h10],'visible','off'); 
+                                else set([CONN_h.menus.m_results_00{24}],'visible','on');
+                                end
+                                if CONN_x.Results.xX.displayvoxels==1, set(CONN_h.menus.m_results_00{14}.h10,'visible','off'); end
                                 conn_menu('updatecscale',[],[],CONN_h.menus.m_results_00{14}.h9);
+                                if CONN_x.Results.xX.displayvoxels==1, 
+                                    set(CONN_h.menus.m_results_00{14}.h10,'string','1'); 
+                                    conn_menu('updatethr',[],[],CONN_h.menus.m_results_00{14}.h10);
+                                end
                             else
                                 t1=reshape(S1,CONN_h.menus.m_results.Y(1).dim(1),CONN_h.menus.m_results.Y(1).dim(2),1,[]); %size(CONN_h.menus.m_results.y.data,4)*size(S1,2));
                                 t2=reshape(S2,CONN_h.menus.m_results.Y(1).dim(1),CONN_h.menus.m_results.Y(1).dim(2),1,[]); %size(CONN_h.menus.m_results.y.data,4)*size(S2,2));
@@ -10892,12 +10910,18 @@ else
                                 set(CONN_h.menus.m_results_00{14}.h9,'string',mat2str(max(t1(:)),2));
                                 conn_menu('update',CONN_h.menus.m_results_00{14},{CONN_h.menus.m_results.Xs,t1,-t2},{CONN_h.menus.m_results.Y(1),CONN_h.menus.m_results.y.slice});
                                 %                         conn_menu('update',CONN_h.menus.m_results_00{14},{CONN_h.menus.m_results.Xs,t1,-t2},{CONN_h.menus.m_results.Y.matdim,CONN_h.menus.m_results.y.slice})
-                                set([CONN_h.menus.m_results_00{24}],'visible','on');
+                                if CONN_x.Results.xX.displayvoxels==1, set([CONN_h.menus.m_results_00{24},CONN_h.menus.m_results_00{14}.h10],'visible','off'); 
+                                else set([CONN_h.menus.m_results_00{24}],'visible','on');
+                                end
                                 set(CONN_h.menus.m_results_00{46},'string','display results');
                                 conn_callbackdisplay_secondlevelclick;
                                 %set([CONN_h.menus.m_results_00{15}],'visible','on');
                                 hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','Change background anatomical image','callback','conn(''background_image'');conn gui_results;');uimenu(hc1,'Label','Change background reference rois','callback','conn(''background_rois'');');set(CONN_h.menus.m_results_00{14}.h2,'uicontextmenu',hc1);
                                 conn_menu('updatecscale',[],[],CONN_h.menus.m_results_00{14}.h9);
+                                if CONN_x.Results.xX.displayvoxels==1, 
+                                    set(CONN_h.menus.m_results_00{14}.h10,'string','1'); 
+                                    conn_menu('updatethr',[],[],CONN_h.menus.m_results_00{14}.h10);
+                                end
                             end
                             
                             if conn_surf_dimscheck(CONN_h.menus.m_results.Y(1).dim)&&~CONN_h.menus.m_results_surfhires, %if isequal(CONN_h.menus.m_results.Y(1).dim,conn_surf_dims(8).*[1 1 2])&&~CONN_h.menus.m_results_surfhires, 
@@ -11204,6 +11228,7 @@ else
                     t0=1+abs(t1)/max(abs(t1(:))); t0(isnan(t0))=0;
                     conn_menu('update',CONN_h.menus.m_results_00{49},{t0,t1,-t2},{struct('names',{CONN_h.menus.m_results.RRC_names},'mat',eye(4),'dim',[size(t0) 1 1]),[]});
                     set(CONN_h.menus.m_results_00{49}.h9,'string',mat2str(max(.01,max(abs(t1(~isnan(t1))))),2));
+                    set(CONN_h.menus.m_results_00{49}.h10,'visible','off');
                     conn_menu('updatecscale',[],[],CONN_h.menus.m_results_00{49}.h9);
                 end
             elseif state==1&&CONN_x.Results.xX.displayvoxels>1, % ROI-level plots
@@ -11620,7 +11645,7 @@ if ~all(islogical(subjectsoption)), set(ht4f,'value',subjectsoption);
 elseif subjectsoption, set([ht4f],'visible','off'); 
 else set([ht4e,ht4f],'visible','off'); 
 end
-if ~isempty(dispoption), ht5=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.32,.8,.08],'string',{'do not display GUI','display GUI'},'value',1+dispoption,'fontsize',8+CONN_gui.font_offset,'backgroundcolor','w'); else ht5=[]; end
+if ~isempty(dispoption), ht5=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.32,.8,.08],'string',{'compute group-level analyses','compute group-level analyses + additional analysis steps'},'value',1,'fontsize',8+CONN_gui.font_offset,'backgroundcolor','w','userdata',[],'callback','if get(gcbo,''value'')==2, val=get(gcbo,''userdata''); set(gcbo,''userdata'',listdlg(''name'',''Group-level analyses'',''PromptString'',''Select additional analysis steps:'',''ListString'',{''Display GUI with group-level results'',''Apply standard settings for cluster-based inferences #1'',''Apply standard settings for cluster-based inferences #2'',''Apply standard settings for cluster-based inferences #3'',''Print results to JPG file'',''Export mask to NIFTI file''},''SelectionMode'',''multiple'',''InitialValue'',val,''ListSize'',[400 200])); end'); else ht5=[]; end
 if ~isempty(groupsoption), ht6=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.32,.8,.08],'string',{'all steps','group-level analyses only (step1)','subject-level backprojection only (step2)'},'value',1+groupsoption,'fontsize',8+CONN_gui.font_offset,'backgroundcolor','w'); else ht6=[]; end
 ht1=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.24,.8,.08],'string',{'overwrite existing results (re-compute for all subjects/ROIs)','do not overwrite (skip already-processed subjects/ROIs)','ask user on each individual analysis step'},'value',1,'fontsize',8+CONN_gui.font_offset);
 if paroption, 
@@ -11648,8 +11673,34 @@ if ok
     end
     tstr=cellstr(get(ht1,'string'));
     conn_disp('fprintf','      %s\n',tstr{get(ht1,'value')});
-    if ~isempty(ht5)&&isequal(get(ht5,'value'),1), 
-        CONN_x.gui.display=0; 
+    if ~isempty(ht5)
+        if isequal(get(ht5,'value'),1)||isempty(get(ht5,'userdata')), 
+            CONN_x.gui.display=0;
+        else
+            CONN_x.gui.display=1;
+            CONN_x.gui.display_options={};
+            val=get(ht5,'userdata');
+            if any(val==2),
+                CONN_x.gui.display_style=1; 
+                if any(val==5), CONN_x.gui.display_options{end+1}={'default_print','results_method1_print.jpg'}; end 
+                if any(val==6), CONN_x.gui.display_options{end+1}={'export_mask','results_method1_mask.nii'}; end 
+            end 
+            if any(val==3)
+                if ~any(val==2), CONN_x.gui.display_style=2; 
+                else CONN_x.gui.display_options{end+1}={'fwec.option',2}; 
+                end
+                if any(val==5), CONN_x.gui.display_options{end+1}={'default_print','results_method2_print.jpg'}; end 
+                if any(val==6), CONN_x.gui.display_options{end+1}={'export_mask','results_method2_mask.nii'}; end 
+            end
+            if any(val==4)
+                if ~any(val==2|val==3), CONN_x.gui.display_style=3; 
+                else CONN_x.gui.display_options{end+1}={'fwec.option',3}; 
+                end
+                if any(val==5), CONN_x.gui.display_options{end+1}={'default_print','results_method3_print.jpg'}; end 
+                if any(val==6), CONN_x.gui.display_options{end+1}={'export_mask','results_method3_mask.nii'}; end 
+            end
+            if ~any(val==1), CONN_x.gui.display_options{end+1}={'close'}; end 
+        end
         tstr=cellstr(get(ht5,'string'));
         conn_disp('fprintf','      %s\n',tstr{get(ht5,'value')});
     end

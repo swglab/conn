@@ -398,11 +398,11 @@ for sess=1:num_sess
             if numel(maskscan)>=100, % stop maskcan from growing too much
                 maskscan_files=maskscan_files+1;
                 try
-                    save(fullfile(output_dir,[art_mask_temporalfile(1:end-4),num2str(maskscan_files),'.mat']),'maskscan');
+                    save(fullfile(output_dir,[art_mask_temporalfile(1:end-4),num2str(maskscan_files),'.mat']),'maskscan','-v7.3');
                 catch
                     art_disp('warning: unable to write to ',output_dir,' folder. Writing output files to ',pwd,' instead.');
                     output_dir=pwd;
-                    save(fullfile(output_dir,[art_mask_temporalfile(1:end-4),num2str(maskscan_files),'.mat']),'maskscan');
+                    save(fullfile(output_dir,[art_mask_temporalfile(1:end-4),num2str(maskscan_files),'.mat']),'maskscan','-v7.3');
                 end
                 maskscan={};
             end
@@ -452,11 +452,11 @@ end
 
 VY=cat(1,VY{:}); VY1=VY(1); %#ok<NASGU>
 try
-    save(fullfile(output_dir,art_mask_temporalfile),'maskscan','maskscan_files','VY1','VY','notcoregistered','xyz','xyz_voxel','Data_Sum','Data_SumSquared'); 
+    save(fullfile(output_dir,art_mask_temporalfile),'maskscan','maskscan_files','VY1','VY','notcoregistered','xyz','xyz_voxel','Data_Sum','Data_SumSquared','-v7.3'); 
 catch
     art_disp(['warning: unable to write to ',output_dir,' folder. Writing output files to ',pwd,' instead.']);
     output_dir=pwd;
-    save(fullfile(output_dir,art_mask_temporalfile),'maskscan','maskscan_files','VY1','VY','notcoregistered','xyz','xyz_voxel','Data_Sum','Data_SumSquared'); 
+    save(fullfile(output_dir,art_mask_temporalfile),'maskscan','maskscan_files','VY1','VY','notcoregistered','xyz','xyz_voxel','Data_Sum','Data_SumSquared','-v7.3'); 
 end
 set(handles.figure1,'closerequestfcn',['try,if ispc,[nill,ok]=system(''del "',fullfile(output_dir,[art_mask_temporalfile(1:end-4),'"*.mat']),''');else [nill,ok]=system(''rm ''''',fullfile(output_dir,[art_mask_temporalfile(1:end-4),'''''*.mat']),'''); end; end; delete(gcbf);']);
 
@@ -850,7 +850,7 @@ for sess=1:num_sess
     cur_sess_start = cur_sess_start + length(g{sess}(:,1));
 end
 rng_mean=rng_mean/num_sess;
-set(handles.globalMean,'xlim',[0,cur_sess_start],'ylim',sort((rng_minmax.*[-1 1])*[1.1,-.1;-.1,1.1])+[0 eps]);
+set(handles.globalMean,'xlim',[0,cur_sess_start],'ylim',sort((rng_minmax.*[-1 1])*[1.1,-.1;-.1,1.1])+[0 1e-10]);
 ylabel(handles.globalMean,'mean image\newlineintensity');
 xlabel(handles.globalMean,'scans');
 % END ohinds 2008-04-23: plot global mean
