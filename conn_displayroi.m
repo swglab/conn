@@ -191,10 +191,10 @@ switch(lower(option)),
         end
         data.names=results(1).names;
         data.names=regexprep(data.names,{'_1_1$','^rs\.','^rsREL\.','^aal\.','^atlas\.'},'');
-        data.namesreduced=regexprep(data.names,{'^BA\.(\d+) \(([LR])\)\. .*','^\((-?\d+),(-?\d+),(-?\d+)\)$','^SLrois\.|^aal\.|^atlas\.|^networks\.','\s\(([LlRr])\)','([^\(\)]+)\(.+\)\s*$'},{'$1$2','($1 $2 $3)','',' ${lower($1)}','$1'});
+        data.namesreduced=regexprep(data.names,{'^BA\.(\d+) \(([LR])\)\. .*','^\((-?\d+),(-?\d+),(-?\d+)\)$','^SLrois\.|^aal\.|^atlas\.|^networks\.','\s\(([LlRr])\)','([^\(\)]*[^\.])\s*\(.+\)\s*$'},{'$1$2','($1 $2 $3)','',' ${lower($1)}','$1'});
         data.names2=results(1).names2;
-        data.names2=regexprep(data.names2,{'_1_1$','^rsREL\.','^rs\.','^aal\.'},'');
-        data.names2reduced=regexprep(data.names2,{'^BA\.(\d+) \(([LR])\)\. .*','^\((-?\d+),(-?\d+),(-?\d+)\)$','^SLrois\.|^aal\.|^atlas\.|^networks\.','\s\(([LlRr])\)','([^\(\)]+)\(.+\)\s*$'},{'$1$2','($1 $2 $3)','',' ${lower($1)}','$1'});
+        data.names2=regexprep(data.names2,{'_1_1$','^rs\.','^rsREL\.','^aal\.','^atlas\.'},'');
+        data.names2reduced=regexprep(data.names2,{'^BA\.(\d+) \(([LR])\)\. .*','^\((-?\d+),(-?\d+),(-?\d+)\)$','^SLrois\.|^aal\.|^atlas\.|^networks\.','\s\(([LlRr])\)','([^\(\)]*[^\.])\s*\(.+\)\s*$'},{'$1$2','($1 $2 $3)','',' ${lower($1)}','$1'});
         data.xyz=cat(1,results(1).xyz{:});
         data.xyz2=cat(1,results(1).xyz2{:});
         data.displaytheserois=1:length(data.names);
@@ -282,9 +282,9 @@ switch(lower(option)),
         data.plotconnoptions.LBUNDL=.5;
         data.plotconnoptions.FONTSIZE=max(4,[2,3]+CONN_gui.font_offset);
         data.plotconnoptions.FONTANGLE=0;
-        if 1, data.plotconnoptions.BCOLOR=.975*[1,1,1];
+        if 0, data.plotconnoptions.BCOLOR=.975*[1,1,1];
         elseif isfield(CONN_gui,'backgroundcolor'), data.plotconnoptions.BCOLOR=CONN_gui.backgroundcolor;
-        else data.plotconnoptions.BCOLOR=.11*[1,1,1];
+        else data.plotconnoptions.BCOLOR=[0.12 0.126 0.132];
         end
         data.plotconnoptions.NPLOTS=12;
         data.plotconnoptions.Projections={[0,-1,0;0,0,1;-1,0,0],[1,0,0;0,0,1;0,1,0],[1,0,0;0,1,0;0,0,1]};
@@ -307,8 +307,8 @@ switch(lower(option)),
         end
         data.ref=spm_vol(filename);
         color1=data.plotconnoptions.BCOLOR;
-        color2=.975*[1 1 1];
-        color3=.9*[1 1 1];
+        color2=color1; %.975*[1 1 1];
+        color3=color2+(.5-color2)*.15; %.9*[1 1 1];
         foregroundcolor=.5*.8+.2*(1-round(color1));
         
         %if all(data.plotconnoptions.BCOLOR>.8), color2=data.plotconnoptions.BCOLOR; 
@@ -319,12 +319,15 @@ switch(lower(option)),
         hmsg=[];%figure('units','norm','position',[.01,.1,.98,.8],'numbertitle','off','name','ROI second-level results. Initializing...','color',color1,'colormap',gray,'menubar','none','toolbar','none','interruptible','off');
         h0=get(0,'screensize');
         hfig=figure('visible','off','renderer','opengl','units','pixels','position',[h0(3)-.75*h0(3)+2,h0(4)-.9*h0(4)-48,.75*h0(3)-2*2,.9*h0(4)]);
+        %h0=get(0,'screensize'); h0=h0(1,3:4)-h0(1,1:2)+1; h0=h0/max(1,max(abs(h0))/2000);
+        %minheight=500;
+        %hfig=figure('visible','off','renderer','opengl','units','pixels','position',[0*72+1,h0(2)-max(minheight,.5*h0(1))-48,h0(1)-0*72-1,max(minheight,.5*h0(1))]);
         data.hfig=hfig;
         set(hfig,'units','norm','numbertitle','off','name',['ROI second-level results ',data.defaultfilepath],'color',color1,'colormap',gray,'menubar','none','toolbar','none','interruptible','off','tag','conn_displayroi','keypressfcn',@conn_displayroi_keypress,'windowbuttondownfcn',@(varargin)conn_display_windowbuttonmotionfcn('down'),'windowbuttonupfcn',@(varargin)conn_display_windowbuttonmotionfcn('up'),'visible','on'); 
         %uicontrol('style','frame','units','norm','position',[.0,.95,.5,.05],'backgroundcolor',color2,'foregroundcolor',color2);
         hframe1=uicontrol('style','frame','units','norm','position',[0,0,1,.27],'backgroundcolor',color2,'foregroundcolor',color2,'parent',data.hfig);
         hframe2=uicontrol('style','frame','units','norm','position',[0,.87,1,.13],'backgroundcolor',color3,'foregroundcolor',color3,'parent',data.hfig);
-        hframe3=uicontrol('style','frame','units','norm','position',[.62,.35,.33,.45],'backgroundcolor',1*[1 1 1],'foregroundcolor',.85*[1,1,1],'parent',data.hfig);
+        hframe3=0;%uicontrol('style','frame','units','norm','position',[.62,.35,.33,.45],'backgroundcolor',1*[1 1 1],'foregroundcolor',.85*[1,1,1],'parent',data.hfig);
         huicontrol_cthr=uicontrol('style','popupmenu','units','norm','position',[.20,.965,.605,.03],'string',{...
             'standard settings for cluster-based inferences #1: Functional Network Connectivity',...
             'standard settings for cluster-based inferences #2: Spatial Pairwise Clustering',...
@@ -334,11 +337,11 @@ switch(lower(option)),
             'alternative settings for network-based inferences: Network Based Statistics',...
             '<HTML><i>show details (advanced Family-Wise Error control settings)</i></HTML>'},'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'fwec.option'},'value',data.thres,'tooltipstring','Select false-positive control method','backgroundcolor',.9*[1,1,1]);
         huicontrol_cthr0=uicontrol('style','text','units','norm','position',[.03,.925,.17,.03],'fontsize',8+CONN_gui.font_offset,'string','connection threshold: p < ','horizontalalignment','right','fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3,'interruptible','off','parent',data.hfig);
-        huicontrol_cthr1=uicontrol('style','edit','units','norm','position',[.20,.925,.10,.03],'fontsize',8+CONN_gui.font_offset,'string',num2str(data.thr),'foregroundcolor',1-color3,'backgroundcolor','w','interruptible','off','callback',{@conn_displayroi,'fwec.connectionlevel.value'},'tooltipstring','Connection-level threshold value (false-positive threshold value for individual connections)','parent',data.hfig);
+        huicontrol_cthr1=uicontrol('style','edit','units','norm','position',[.20,.925,.10,.03],'fontsize',8+CONN_gui.font_offset,'string',num2str(data.thr),'foregroundcolor',1-color3,'backgroundcolor',color3,'interruptible','off','callback',{@conn_displayroi,'fwec.connectionlevel.value'},'tooltipstring','Connection-level threshold value (false-positive threshold value for individual connections)','parent',data.hfig);
         huicontrol_cthr2=uicontrol('style','popupmenu','units','norm','position',[.325,.915,.25,.04],'fontsize',8+CONN_gui.font_offset,'string',{'p-uncorrected','p-FDR corrected','p-FDR corrected (TFCE)','p-FWE corrected (TFCE)','F/T/X stat'},'foregroundcolor',1-color3,'backgroundcolor',color3,'tooltipstring','<HTML>False-positive control type for individual connections</HTML>','interruptible','off','callback',{@conn_displayroi,'fwec.connectionlevel.type'},'value',max(1,min(5, data.thrtype)),'parent',data.hfig);
         huicontrol_cthr3=uicontrol('style','popupmenu','units','norm','position',[.605,.915,.20,.04],'fontsize',8+CONN_gui.font_offset,'string',{'positive contrast (one-sided)','negative contrast (one-sided)','two-sided'},'foregroundcolor',1-color3,'backgroundcolor',color3,'tooltipstring','Analysis results directionality','interruptible','off','callback',{@conn_displayroi,'fwec.connectionlevel.side'},'value',data.side,'parent',data.hfig);
         huicontrol_ccthr0=uicontrol('style','text','units','norm','position',[.03,.885,.17,.03],'fontsize',8+CONN_gui.font_offset,'string','cluster threshold: p < ','horizontalalignment','right','fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3,'fontweight','bold','interruptible','off','parent',data.hfig);
-        huicontrol_ccthr1=uicontrol('style','edit','units','norm','position',[.20,.885,.10,.03],'fontsize',8+CONN_gui.font_offset,'string',num2str(data.mvpathr),'foregroundcolor',1-color3,'backgroundcolor','w','interruptible','off','callback',{@conn_displayroi,'fwec.clusterlevel.value'},'tooltipstring','<HTML>Cluster-level threshold value (false-positive threshold value for individual clusters/groups of connections)','parent',data.hfig);
+        huicontrol_ccthr1=uicontrol('style','edit','units','norm','position',[.20,.885,.10,.03],'fontsize',8+CONN_gui.font_offset,'string',num2str(data.mvpathr),'foregroundcolor',1-color3,'backgroundcolor',color3,'interruptible','off','callback',{@conn_displayroi,'fwec.clusterlevel.value'},'tooltipstring','<HTML>Cluster-level threshold value (false-positive threshold value for individual clusters/groups of connections)','parent',data.hfig);
         huicontrol_ccthr2=uicontrol('style','popupmenu','units','norm','position',[.325,.875,.48,.04],'fontsize',8+CONN_gui.font_offset,'string',data.mvpathrtype_all(data.mvpathrtype_shown),'value',find(data.mvpathrtype_shown==data.mvpathrtype),'foregroundcolor',1-color3,'backgroundcolor',color3,'tooltipstring',...
             ['<HTML>Type of cluster- or ROI- level false-positive control',...
             '<br/> <br/> - choose <i>network</i> measures for <b>non-parametric network-level inferences</b> (NBS: Network Based Statistics, Zalesky et al. 2010)<br/> Networks represent maximal subgraphs of suprathreshold-connected ROIs (groups of ROIs and suprathreshold effects/connections among them)<br/> Network size and Network mass measures both represent measures of degree/cost of these subgraphs (i.e. number and strength of suprathreshold effects/connections within each graph) <br/> Network TFCE scores represent a combined measure of network size and mass, defined as the Threshold Free Cluster Enhancement score for the chosen support section (Smith and Nichols 2009) <br/> Multiple comparison correction is implemented at the network-level (FWE/FDR across multiple networks). Network-level inferences remain valid when used in combination with arbitrary (e.g. p-uncorrected) connection thresholds<br/> e.g. <b>connection-level threshold p &#60 0.01 (p-uncorrected) & cluster-threshold p &#60 0.05 (network p-FDR corrected)</b>',...
@@ -355,18 +358,18 @@ switch(lower(option)),
             uicontrol('style','text','units','norm','position',[.20,.875,.605,.07],'fontsize',7+CONN_gui.font_offset,'string','','foregroundcolor',.5*[1 1 1],'backgroundcolor',color3,'horizontalalignment','center','parent',data.hfig),...
             0, ...%uicontrol('style','listbox','units','norm','position',[.57,.31,.41,.39],'fontsize',8+CONN_gui.font_offset,'string',' ','max',2,'foregroundcolor',.9-.8*color2,'backgroundcolor',color2,'tooltipstring','Selecting one or several seed ROIs limits the analyses only to the connectivity between the selected seeds and all of the ROIs in the network','interruptible','off','callback',{@conn_displayroi,'list1'},'keypressfcn',@conn_menu_search,'visible','off','parent',data.hfig),...
             uicontrol('style','text','units','norm','position',[.05,.22,.90,.03],'fontsize',7+CONN_gui.font_offset,'string',sprintf('%-24s  %-20s  %+12s  %+12s  %+12s','Analysis Unit','Statistic','p-unc','p-FDR','p-FWE'),'foregroundcolor',.5*[1 1 1],'backgroundcolor',color2,'fontname','monospaced','horizontalalignment','left','parent',data.hfig),...
-            uicontrol('style','listbox','units','norm','position',[.05,.07,.90,.15],'fontsize',7+CONN_gui.font_offset,'string',' ','fontname','monospaced','foregroundcolor',1-color2,'backgroundcolor',color2,'tooltipstring','Statistics for each connection, ROI, or cluster. Right-click to export table to .txt file','max',2,'interruptible','off','callback',{@conn_displayroi,'list2'},'keypressfcn',@conn_menu_search,'parent',data.hfig),...
+            uicontrol('style','listbox','units','norm','position',[.05,.07,.90,.15],'fontsize',7+CONN_gui.font_offset,'string',' ','fontname','monospaced','foregroundcolor',round(1-color2),'backgroundcolor',color2,'tooltipstring','Statistics for each connection, ROI, or cluster. Right-click to export table to .txt file','max',2,'interruptible','off','callback',{@conn_displayroi,'list2'},'keypressfcn',@conn_menu_search,'parent',data.hfig),...
             uicontrol('style','checkbox','units','norm','position',[.05,.04,.20,.03],'fontsize',8+CONN_gui.font_offset,'string','display extended stats','foregroundcolor',1-color2,'backgroundcolor',color2,'interruptible','off','callback',{@conn_displayroi,'displayconnectionstats'},'value',data.displayconnectionstats,'tooltipstring','Check to display additional and post-hoc statistics for all suprathreshold units','parent',data.hfig),... %uicontrol('style','text','units','norm','position',[.61,.50,.38,.04],'fontsize',8+CONN_gui.font_offset,'string','Define thresholds:','foregroundcolor',color2,'backgroundcolor',1-.5*color2,'fontweight','bold','horizontalalignment','left','parent',data.hfig),...
-            uicontrol('style','text','units','norm','position',[.64,.76,.14,.03],'string','Display&Print','horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',1*[1 1 1],'parent',data.hfig),... %uicontrol('style','pushbutton','units','norm','position',[.84,.05,.14,.04],'fontsize',8+CONN_gui.font_offset,'string','non-parametric stats','callback',{@conn_displayroi,'enableperm'},'tooltipstring','Enables permutation-test based statistics (Cluster and ROI size/mass statistics)','parent',data.hfig),...
-            uicontrol('style','text','units','norm','position',[.80,.76,.14,.03],'string','Tools','horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',1*[1 1 1],'parent',data.hfig),... %uicontrol('style','text','units','norm','position',[.61,.95,.38,.04],'fontsize',8+CONN_gui.font_offset,'string','Define connectivity matrix:','foregroundcolor',color2,'backgroundcolor',1-.5*color2,'fontweight','bold','horizontalalignment','left','parent',data.hfig),...
-            uicontrol('style','pushbutton','units','norm','position',[.64,.40,.29,.04],'fontsize',7+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'string',sprintf('Analysis of %d connections among %d ROIs',numel(data.names)*(numel(data.names)-1)/2*(1+~data.issymmetric),numel(data.names)),'tooltipstring','<HTML>Defines subset of ROIs to include in these analyses (among all the sources selected in the first-level analysis definition)<br/>note: this choice affects all inferences</HTML>','interruptible','off','callback',{@conn_displayroi,'roi.select'},'parent',data.hfig),...
+            uicontrol('style','text','units','norm','position',[.64,.76,.14,.03],'string','Display&Print','horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',color2,'parent',data.hfig),... %uicontrol('style','pushbutton','units','norm','position',[.84,.05,.14,.04],'fontsize',8+CONN_gui.font_offset,'string','non-parametric stats','callback',{@conn_displayroi,'enableperm'},'tooltipstring','Enables permutation-test based statistics (Cluster and ROI size/mass statistics)','parent',data.hfig),...
+            uicontrol('style','text','units','norm','position',[.80,.76,.14,.03],'string','Tools','horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',color2,'parent',data.hfig),... %uicontrol('style','text','units','norm','position',[.61,.95,.38,.04],'fontsize',8+CONN_gui.font_offset,'string','Define connectivity matrix:','foregroundcolor',color2,'backgroundcolor',1-.5*color2,'fontweight','bold','horizontalalignment','left','parent',data.hfig),...
+            uicontrol('style','pushbutton','units','norm','position',[.64,.40,.29,.04],'fontsize',7+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',color2,'string',sprintf('Analysis of %d connections among %d ROIs',numel(data.names)*(numel(data.names)-1)/2*(1+~data.issymmetric),numel(data.names)),'tooltipstring','<HTML>Defines subset of ROIs to include in these analyses (among all the sources selected in the first-level analysis definition)<br/>note: this choice affects all inferences</HTML>','interruptible','off','callback',{@conn_displayroi,'roi.select'},'parent',data.hfig),...
             uicontrol('style','checkbox','units','norm','position',[.25,.04,.20,.03],'fontsize',8+CONN_gui.font_offset,'string','display extended roi labels','foregroundcolor',1-color2,'backgroundcolor',color2,'interruptible','off','callback',{@conn_displayroi,'displayroilabelstats'},'value',data.displayroilabelsinstats,'visible','off','tooltipstring','Check to include complete labels when describing ROIs','parent',data.hfig),... %uicontrol('style','pushbutton','units','norm','position',[.61,.10,.38,.04],'fontsize',8+CONN_gui.font_offset,'string','Select all','tooltipstring','Looks at the connectivity between all ROIs in the network','interruptible','off','callback',{@conn_displayroi,'selectall'},'parent',data.hfig),...
-            uicontrol('style','pushbutton','units','norm','position',[.64,.36,.29,.04],'fontsize',7+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'string','ROIs sorted using hierarchical clustering','tooltipstring','<HTML>Defines ROIs order and clusters<br/>note: this choice affects all cluster-based inferences (but not connection- ROI- or network-based inferences)</HTML>','interruptible','off','callback',{@conn_displayroi,'roi.order'},'parent',data.hfig),...
+            uicontrol('style','pushbutton','units','norm','position',[.64,.36,.29,.04],'fontsize',7+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',color2,'string','ROIs sorted using hierarchical clustering','tooltipstring','<HTML>Defines ROIs order and clusters<br/>note: this choice affects all cluster-based inferences (but not connection- ROI- or network-based inferences)</HTML>','interruptible','off','callback',{@conn_displayroi,'roi.order'},'parent',data.hfig),...
             huicontrol_ccthr1,...
             huicontrol_ccthr2,...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.68,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Export mask','foregroundcolor',foregroundcolor,'callback',{@conn_displayroi,'export_mask'},'tooltipstring','Exports list of suprathreshold connections in ROI-to-ROI connectivity matrix','parent',data.hfig),... %0,...%uicontrol('style','popupmenu','units','norm','position',[.68,.34,.15,.04],'fontsize',8+CONN_gui.font_offset,'string',{'connection-level results','seed-level results','network-level results'},'foregroundcolor',1-color2,'backgroundcolor',color2,'tooltipstring','Criteria for sorting results in statistics table','interruptible','off','callback',{@conn_displayroi,'mvpasort'},'value',data.mvpasortresultsby),...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.72,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Import values','foregroundcolor',foregroundcolor,'callback',{@conn_displayroi,'import_values'},'tooltipstring','Imports individual connectivity values for each suprathreshold connection and for each subject into CONN toolbox as second-level covariates','parent',data.hfig),... %uicontrol('style','checkbox','units','norm','position',[.61,.36,.03,.03],'fontsize',8+CONN_gui.font_offset,'foregroundcolor',1-color2,'backgroundcolor',color2,'interruptible','off','callback',{@conn_displayroi,'mvpaenablethr'},'value',data.mvpaenablethr,'tooltipstring','Enable Seed/Network threshold','parent',data.hfig)...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.64,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Export data','foregroundcolor',foregroundcolor,'callback',{@conn_displayroi,'export_data'},'tooltipstring','Exports all connectvity values (entire ROI-to-ROI matrix) for each individual subject and condition to matrix NIFTI file','parent',data.hfig),... 
+            uicontrol('style','pushbutton','units','norm','position',[.80,.68,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Export mask','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'callback',{@conn_displayroi,'export_mask'},'tooltipstring','Exports list of suprathreshold connections in ROI-to-ROI connectivity matrix','parent',data.hfig),... %0,...%uicontrol('style','popupmenu','units','norm','position',[.68,.34,.15,.04],'fontsize',8+CONN_gui.font_offset,'string',{'connection-level results','seed-level results','network-level results'},'foregroundcolor',1-color2,'backgroundcolor',color2,'tooltipstring','Criteria for sorting results in statistics table','interruptible','off','callback',{@conn_displayroi,'mvpasort'},'value',data.mvpasortresultsby),...
+            uicontrol('style','pushbutton','units','norm','position',[.80,.72,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Import values','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'callback',{@conn_displayroi,'import_values'},'tooltipstring','Imports individual connectivity values for each suprathreshold connection and for each subject into CONN toolbox as second-level covariates','parent',data.hfig),... %uicontrol('style','checkbox','units','norm','position',[.61,.36,.03,.03],'fontsize',8+CONN_gui.font_offset,'foregroundcolor',1-color2,'backgroundcolor',color2,'interruptible','off','callback',{@conn_displayroi,'mvpaenablethr'},'value',data.mvpaenablethr,'tooltipstring','Enable Seed/Network threshold','parent',data.hfig)...
+            uicontrol('style','pushbutton','units','norm','position',[.80,.64,.13,.04],'fontsize',8+CONN_gui.font_offset,'string','Export data','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'callback',{@conn_displayroi,'export_data'},'tooltipstring','Exports all connectvity values (entire ROI-to-ROI matrix) for each individual subject and condition to matrix NIFTI file','parent',data.hfig),... 
             hframe1,...%uicontrol('style','pushbutton','units','norm','position',[0,0,.10,.025],'fontsize',8+CONN_gui.font_offset,'backgroundcolor',get(hfig,'color'),'string','display options','tooltipstring','Controls the way functional results are displayed (right-click on figure to get this same menu and remove this button)','callback','set(findobj(gcbf,''type'',''uicontextmenu'',''tag'',''conn_displayroi_plot''),''visible'',''on'')'),...
             uicontrol('style','text','units','norm','position',[.05,0,.90,.03],'string','','foregroundcolor',1-color2,'backgroundcolor',color2,'parent',data.hfig),...
             huicontrol_cthr0,...
@@ -378,13 +381,14 @@ switch(lower(option)),
             uicontrol('style','pushbutton','units','norm','position',[.71,.585,.06,.05],'string','Glass print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'glass_print'},'tooltipstring','<HTML><b>Glass print</b><br/>Prints current results on 3d glass-brain</HTML>','parent',data.hfig), ...
             uicontrol('style','pushbutton','units','norm','position',[.64,.530,.06,.05],'string','Plot effects','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'cluster_view'},'tooltipstring','<HTML><b>Plot effects</b><br/>Explores/displays average effect sizes within each suprathreshold cluster or connection</HTML>'),...
             uicontrol('style','pushbutton','units','norm','position',[.71,.530,.06,.05],'string','Plot design','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'plot_design'},'tooltipstring','<HTML><b>Plot design</b><br/>Displays General Linear Model design matrix and additional details</HTML>'), ...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.58,.13,.04],'string','Bookmark','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'bookmark'},'tooltipstring','Bookmark this second-level results explorer view'),...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.54,.13,.04],'string','Open folder','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'openfolder'},'tooltipstring','Open folder containing current second-level results files'), ...
-            uicontrol('style','pushbutton','units','norm','position',[.80,.50,.13,.04],'string','Graphic options','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'menubar'},'tooltipstring','Show/hide menubar for advanced display/graphic options'), ...
+            uicontrol('style','pushbutton','units','norm','position',[.80,.58,.13,.04],'string','Bookmark','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'bookmark'},'tooltipstring','Bookmark this second-level results explorer view'),...
+            uicontrol('style','pushbutton','units','norm','position',[.80,.54,.13,.04],'string','Open folder','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'openfolder'},'tooltipstring','Open folder containing current second-level results files'), ...
+            uicontrol('style','pushbutton','units','norm','position',[.80,.50,.13,.04],'string','Graphic options','foregroundcolor',foregroundcolor,'backgroundcolor',color2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'menubar'},'tooltipstring','Show/hide menubar for advanced display/graphic options'), ...
             uicontrol('style','pushbutton','units','norm','position',[.64,.640,.06,.05],'string','Matrix display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'matrix_view'},'tooltipstring','<HTML><b>Matrix display</b><br/>Displays current results on ROI-to-ROI matrix display</HTML>','parent',data.hfig), ...
             uicontrol('style','pushbutton','units','norm','position',[.71,.640,.06,.05],'string','Matrix print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'matrix_print'},'tooltipstring','<HTML><b>Matrix print</b><br/>Prints current results on ROI-to-ROI matrix display</HTML>','parent',data.hfig), ...
             uicontrol('style','pushbutton','units','norm','position',[.64,.695,.06,.05],'string','Ring Display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_displayroi,'ring_view'},'tooltipstring','<HTML><b>Ring display</b><br/>Displays current results on ROI-ring display</HTML>','parent',data.hfig) ...
             ];
+        uiwrap(data.handles([8,  12,14,  17,18,19,31,32,33]));
         bp=[36 26 27 28 34 35 29 30 ];
         bp_isprint=[0 1 0 1 0 1 0 0];
         temp=imread(fullfile(fileparts(which(mfilename)),sprintf('conn_vproject_icon%02d.jpg',0))); temp=double(temp); printmask=round(temp/255);
@@ -393,12 +397,12 @@ switch(lower(option)),
             temp=imread(fullfile(fileparts(which(mfilename)),sprintf('conn_displayroi_icon%02d.jpg',n1))); temp=double(temp); temp=temp/255; temp=max(0,min(1,(temp).^.5)); ft=min(size(temp,1)/ceil(pt(4)),size(temp,2)/ceil(pt(3))); if any(n1==[1,2]), ft=0.95*ft; elseif any(n1==[7,8]), ft=.90*ft; else ft=.70*ft; end;
             maxtemp=1;%mode(round(temp(:)*100))/100;
             if maxtemp<.5, temp=1-temp; maxtemp=1-maxtemp; end
-            temp=max(0,min(1, .25*temp+.75*temp/maxtemp.*repmat(shiftdim(.95*[1 1 1],-1),[size(temp,1),size(temp,2),1,size(temp,4)]) ));
+            temp=max(0,min(1, .75*temp+.25*temp/maxtemp.*repmat(shiftdim(color1,-1),[size(temp,1),size(temp,2),1,size(temp,4)]) ));
             if bp_isprint(n1)
                 if ismember(n1,[2,4,6]), tempprintmask=printmask(ceil(size(printmask,1)/4)+(1:ceil(size(printmask,1)/2)),ceil(size(printmask,2)/4)+(1:ceil(size(printmask,2)/2))); else tempprintmask=printmask; end
-                temp=.75+.25*temp;
+                temp=.75*mean(color1)+.25*temp;
                 if size(temp,1)>size(temp,2), temp=temp(1:size(temp,2),:,:); end
-                temp(:,ceil(size(temp,2)/2+(1:size(temp,1))-size(temp,1)/2),:)=max(0,temp(:,ceil(size(temp,2)/2+(1:size(temp,1))-size(temp,1)/2),:)-repmat(.15*tempprintmask(round(linspace(1,size(tempprintmask,1),size(temp,1))),round(linspace(1,size(tempprintmask,2),size(temp,1)))),[1,1,3]));
+                temp(:,ceil(size(temp,2)/2+(1:size(temp,1))-size(temp,1)/2),:)=max(0,temp(:,ceil(size(temp,2)/2+(1:size(temp,1))-size(temp,1)/2),:)+(1-2*mean(color1))*repmat(.5*tempprintmask(round(linspace(1,size(tempprintmask,1),size(temp,1))),round(linspace(1,size(tempprintmask,2),size(temp,1)))),[1,1,3]));
             end
             tempr1=round(1:ft/10:size(temp,1)); tempr1=tempr1(1:floor(numel(tempr1)/10)*10);
             tempr2=round(1:ft/10:size(temp,2)); tempr2=tempr2(1:floor(numel(tempr2)/10)*10);
@@ -581,7 +585,7 @@ switch(lower(option)),
             isource=[];
             itarget=[];
             if data.list2(value,2)>0, % connection
-                txt2=sprintf('connectivity between %s and %s',data.names2reduced{data.list2(value,1)},data.names2reduced{data.list2(value,2)});
+                txt2=sprintf('connectivity between %s and %s',data.names2{data.list2(value,1)},data.names2{data.list2(value,2)});
                 isource=data.list2(value,1);
                 itarget=data.list2(value,2);                
             elseif data.list2(value,1)>0, % seed
@@ -663,6 +667,7 @@ switch(lower(option)),
             [tfilename,tpathname]=uiputfile({'*.nii','NIFI files (*.nii)'; '*.txt','text files (*.txt)'; '*.csv','CSV-files (*.csv)'; '*.mat','MAT-files (*.mat)'; '*',  'All Files (*)'},'Output mask to file:',fullfile(data.defaultfilepath,'results.nii'));
             if ischar(tfilename)&&~isempty(tfilename),
                 tfilename=fullfile(tpathname,tfilename);
+            else return
             end
         end
         if ~isempty(tfilename)
@@ -1303,7 +1308,7 @@ switch(lower(option)),
                 end
             end
             if numel(values)==1&&all(values>0)
-                if data.list2(value,2)>0, txt=sprintf('connectivity between %s and %s',data.names2reduced{data.list2(value,1)},data.names2reduced{data.list2(value,2)});
+                if data.list2(value,2)>0, txt=sprintf('connectivity between %s and %s',data.names2{data.list2(value,1)},data.names2{data.list2(value,2)});
                 elseif data.list2(value,1)>0, txt=sprintf('connectivity with %s',data.names2{data.list2(value,1)});
                 else txt=sprintf('cluster comprising %d ROIs and %d connections among them',nnz(mask),ceil(nnz(data.list2(:,3)==data.list2(value,3)&data.list2(:,1)>0&data.list2(:,2)>0))); 
                 %else txt=sprintf('cluster comprising %d ROIs and %d connections among them',nnz(mask),ceil(nnz(data.list2(:,3)==data.list2(value,3)&data.list2(:,1)>0&data.list2(:,2)>0)/2)); % note: display only (assuming bidirectional)
@@ -1796,7 +1801,8 @@ switch(data.display),
         
         %figure(hfig);
         set(hfig,'pointer','watch');%drawnow;
-        hcontrols=findobj(hfig,'enable','on');
+        %hcontrols=findobj(hfig,'enable','on');
+        hcontrols=findobj(hfig,'enable','on','-not','style','edit');
         hcontrols=hcontrols(ishandle(hcontrols));
         set(hcontrols,'enable','off');
         th1=axes('units','norm','position',data.plotposition{1},'parent',data.hfig);th2=patch([0 0 1 1],[0 1 1 0],'k','edgecolor','none','facecolor',get(hfig,'color'),'facealpha',.5,'parent',th1);set(th1,'xlim',[0 1],'ylim',[0 1],'visible','off'); 
@@ -2552,8 +2558,8 @@ switch(data.display),
                             %txt2{end+1}=(sprintf('%-6s %-6s  %6.2f  %6.2f  %4d  %12.6f  %12.6f',['(',num2str(na1),')'],['(',num2str(na2),')'],data.h(n1,n2),data.F(n1,n2),data.dof(n1,end),p(n1,n2),P(n1,n2)));
                             %if data.displayroilabelsinstats, tname1=sprintf('(%s)',data.names2reduced{n1}); else tname1=sprintf('(%d)',sortedroinumbers(n1)); end %na1); end
                             %if data.displayroilabelsinstats, tname2=sprintf('(%s)',data.names2reduced{n2}); else tname2=sprintf('(%d)',sortedroinumbers(n2)); end %na2); end
-                            tname1=sprintf('\\\\%03d\\\\%-32s\\\\',sortedroinumbers(n1),data.names2reduced{n1});
-                            tname2=sprintf('\\\\%03d\\\\%-32s\\\\',sortedroinumbers(n2),data.names2reduced{n2});
+                            tname1=sprintf('\\\\%03d\\\\%-32s\\\\',sortedroinumbers(n1),data.names2{n1});
+                            tname2=sprintf('\\\\%03d\\\\%-32s\\\\',sortedroinumbers(n2),data.names2{n2});
                             tname3=repmat(' ',1,max(0,24-numel(sprintf(' Connection %03d-%03d',sortedroinumbers(n1),sortedroinumbers(n2)))));
                             if 0,%data.mvpathrtype_isftest(data.mvpathrtype), txt2{end+1}=sprintf('%-24s  %-20s  %12.6f  %12.6f',[' ',tname1,'-',tname2,tname3],sprintf('%s%s = %.2f',data.statsname,data.dofstr{n1},data.F(n1,n2)),p(n1,n2),data.Ppos(n1,n2)); % P(n1,n2)); % note: a posteriori p-fdr values (for each ROI seed)
                             else txt2{end+1}=sprintf('%-24s  %-20s  %12.6f  %12.6f',[' Connection ',tname1,'-',tname2,tname3],sprintf('%s%s = %.2f',data.statsname,data.dofstr{n1},data.F(n1,n2)),p(n1,n2),P(n1,n2));
@@ -4257,6 +4263,35 @@ else
     if dosave, save(indexfile,'listsrois'); end
     simfilename=char(arrayfun(@(a,b)fullfile(fileparts(spmfile),sprintf('nonparametricroi_p%d_%.8f_i%d.mat',a,b,idx)),THR_TYPE,THR,'uni',0));
     if ~isempty(dir(conn_prepend('parallel_*_',simfilename))), conn_process('results_nonparametric_collapse',simfilename); end
+end
+end
+
+function uiwrap(h)
+global CONN_gui;
+if ~isfield(CONN_gui,'uicontrol_border'), CONN_gui.uicontrol_border=2; end
+for nh=1:numel(h)
+    hpar=get(h(nh),'parent');
+    bgcolor=get(hpar,'color');
+    set(h(nh),'units','pixels');
+    tpos=get(h(nh),'position');
+    switch(get(h(nh),'style'))
+        case 'pushbutton'
+            htb=[uicontrol('style','frame','units','pixels','position',tpos+[tpos(3)-2*CONN_gui.uicontrol_border,0,2*CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,tpos(4)-CONN_gui.uicontrol_border,0,CONN_gui.uicontrol_border-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,0,0,2*CONN_gui.uicontrol_border-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,0,CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar)];
+        case 'listbox',
+            htb=[uicontrol('style','frame','units','pixels','position',tpos+[tpos(3)-2*CONN_gui.uicontrol_border,0,2*CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,tpos(4)-CONN_gui.uicontrol_border,0,CONN_gui.uicontrol_border-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,-1,0,CONN_gui.uicontrol_border+2-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,0,CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar)];
+        case 'edit'
+            htb=[uicontrol('style','frame','units','pixels','position',tpos+[tpos(3)-2*CONN_gui.uicontrol_border,0,2*CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,tpos(4)-CONN_gui.uicontrol_border,0,CONN_gui.uicontrol_border-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,0,0,CONN_gui.uicontrol_border+1-tpos(4)],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar),...
+                uicontrol('style','frame','units','pixels','position',tpos+[0,0,CONN_gui.uicontrol_border-tpos(3),0],'foregroundcolor',bgcolor,'backgroundcolor',bgcolor,'units','norm','parent',hpar)];        
+    end
+    set(h(nh),'units','norm');
 end
 end
 
