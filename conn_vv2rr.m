@@ -1,36 +1,51 @@
-function Z=conn_vv2rr(ROI,filepath,folderout,validconditions)
-% computes ROI-to-ROI matrix from Voxel-to-Voxel SVD representation for each subject
+function [Z,xyz]=conn_vv2rr(ROI,validconditions,filepath,folderout)
+% computes ROI-to-ROI matrix by averaging Voxel-to-Voxel correlations
+% 
+
+% note: call from within conn_process or conn_batch
+
 global CONN_x;
 
 nconditions=length(CONN_x.Setup.conditions.names)-1;
-if nargin<2||isempty(filepath), filepath=CONN_x.folders.preprocessing; end
-if nargin<3, folderout=[]; end
-if nargin<4||isempty(validconditions), validconditions=1:length(CONN_x.Setup.conditions.names)-1; end
+if nargin<2||isempty(validconditions), validconditions=1:nconditions; end
+if nargin<3||isempty(filepath), filepath=CONN_x.folders.preprocessing; end
+if nargin<4, folderout=[]; end
 icondition=[];isnewcondition=[];for ncondition=1:nconditions,[icondition(ncondition),isnewcondition(ncondition)]=conn_conditionnames(CONN_x.Setup.conditions.names{ncondition}); end
 if any(isnewcondition(validconditions)), error(['Some conditions have not been processed yet. Re-run previous step']); end
 % addnew=false;
 if iscell(ROI), ROI=char(ROI); end
-if ischar(ROI), ROI=spm_vol(ROI); end
+if ischar(ROI), ROI=conn_fileutils('spm_vol',ROI); end
 
 %h=conn_waitbar(0,'Extracting correlation matrix, please wait...');
+lastmatdim=[];
+Z=[];
+xyz=[];
 for ivalidcondition=1:numel(validconditions),
     ncondition=validconditions(ivalidcondition);
-    Z=zeros(size(ROI,1),size(ROI,1),CONN_x.Setup.nsubjects);
     for nsub=1:CONN_x.Setup.nsubjects
         filename_B1=fullfile(filepath,['vvPC_Subject',num2str(nsub,'%03d'),'_Condition',num2str(icondition(ncondition),'%03d'),'.mat']);
         Y1=conn_vol(filename_B1);
-        if isstruct(ROI), 
-            xyz=conn_convertcoordinates('idx2tal',1:prod(Y1.matdim.dim),Y1.matdim.mat,Y1.matdim.dim)';
-            W=spm_get_data(ROI,pinv(ROI.mat)*xyz);
-            if size(W,1)==1&&isequal(reshape(unique(W),[],1),(0:max(ROI(:)))'), W=double(repmat(W,[max(W(:)),1])==repmat((1:max(W(:)))',[1,size(W,2)])); end
-        else W=ROI;
+        if isequal(lastmatdim, Y1.matdim)
+        else
+            if isstruct(ROI), % 4d-file
+                xyz=conn_convertcoordinates('idx2tal',1:prod(Y1.matdim.dim),Y1.matdim.mat,Y1.matdim.dim)';
+                W=conn_fileutils('spm_get_data',ROI,pinv(ROI(1).mat)*xyz);
+                if size(W,1)==1&&isequal(reshape(unique(W),[],1),(0:max(W(:)))'), W=double(repmat(W,[max(W(:)),1])==repmat((1:max(W(:)))',[1,size(W,2)])); end
+                w=W(:,Y1.voxels);
+                sw=sum(w,2);
+                temp=w*xyz(1:3,:)';
+                xyz=temp./repmat(max(eps,sw),1,3);
+                lastmatdim=Y1.matdim;
+            else W=ROI; % ROIs-by-voxels matrix
+            end
+            assert(prod(Y1.matdim.dim)==size(W,2),'unequal number of voxels in ROI (%d) and VV (%d) files',size(W,2), prod(Y1.matdim.dim));
         end
-        assert(prod(Y1.matdim.dim)==size(W,2),'unequal number of voxels in ROI (%d) and VV (%d) files',size(W,2), prod(Y1.matdim.dim));
-        [x,idx]=conn_get_volume(Y1);
+        x=conn_get_volume(Y1);
         w=W(:,Y1.voxels);
-        Z(:,:,nsub)=((w*x')*(x*w'))./max(eps,w*w');
-        %temp=temp./repmat(max(eps,sum(abs(W),2)'),size(x,1),1);
-        %Z(:,:,nsub)=temp'*temp;
+        sw=sum(w,2);
+        if isempty(Z), Z=zeros(size(W,1),size(W,1),CONN_x.Setup.nsubjects); end
+        temp=x*w';
+        Z(:,:,nsub)=(temp'*temp)./max(eps,sw*sw');
         %conn_waitbar(((ivalidcondition-1)*CONN_x.Setup.nsubjects+nsub)/numel(validconditions)/CONN_x.Setup.nsubjects,h,sprintf('Subject %d Condition %d',nsub,ncondition));
         %n=n+1;
     end

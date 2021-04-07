@@ -2,16 +2,17 @@ function varargout=conn_hdr(filename)
 % CONN_HDR Displays setup information in conn*.mat file
 %
 
+CONN_x=struct; 
 if nargin<1 || isempty(filename),
     [filename,filepath]=uigetfile('conn*.mat');
     if ~ischar(filename), return; end
     filename=fullfile(filepath,filename);
-    load(filename,'CONN_x');
+    conn_loadmatfile(filename,'CONN_x');
 elseif isstruct(filename),
     CONN_x=filename;
     filename='';
 else
-    load(filename,'CONN_x');
+    conn_loadmatfile(filename,'CONN_x');
 end
 txt={};
 nl1covariates=length(CONN_x.Setup.l1covariates.names)-1;
@@ -48,7 +49,7 @@ for nsub=1:CONN_x.Setup.nsubjects,
             filename=CONN_x.Setup.l1covariates.files{nsub}{nl1covariate}{nses}{1};
             names=CONN_x.Setup.l1covariates.names{nl1covariate};
             if strcmp(filename,'[raw values]'),
-                data=CONN_x.Setup.l1covariates.files{nsub}{nl1covariate}{nses}{3};
+                data=conn_get_l1covariate(nsub,nl1covariate,nses);%CONN_x.Setup.l1covariates.files{nsub}{nl1covariate}{nses}{3};
                 txt{end+1}=sprintf('First-level covariate "%s" (%d scans, %d dimensions)',names,size(data,1),size(data,2));
             else
                 txt{end+1}=sprintf('First-level covariate "%s": %s',names,filename);

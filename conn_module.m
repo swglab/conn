@@ -195,14 +195,15 @@ switch(lower(option))
             case {'masks','rois'}
                 data=conn('get','Setup.rois');
                 files={};
+                if strcmpi(varargin{1},'rois'), maxrois=inf; else maxrois=3; end
                 for nsub=1:numel(data.files),
-                    for nroi=1:min(3, numel(data.files{nsub})),
+                    for nroi=1:min(maxrois, numel(data.files{nsub})),
                         for nses=1:numel(data.files{nsub}{nroi}),
                             files{nroi}{nsub}{nses}=data.files{nsub}{nroi}{nses}{1};
                         end
                     end
                 end
-                for nroi=1:min(3, numel(data.names)-1),
+                for nroi=1:min(maxrois, numel(data.names)-1),
                     names{nroi}=data.names{nroi};
                 end
                 if numel(varargin)>1,
@@ -386,7 +387,7 @@ switch(lower(option))
                     fprintf('loading file %s\n',filename);
                     [nill,nill,fext]=fileparts(filename);
                     if strcmp(fext,'.json')
-                        options=spm_jsonread(filename);
+                        options=conn_jsonread(filename);
                     else
                         options=conn_loadcfgfile(filename,options);
                         if isfield(options,'functionals')
@@ -464,7 +465,7 @@ switch(lower(option))
         end
         conn_batch(Batch);
         
-    case 'glm'
+    case 'glm'        
         % loads .cfg files
         options=struct;
         if nargin==1 
@@ -486,7 +487,7 @@ switch(lower(option))
                     fprintf('loading file %s\n',filename);
                     [nill,nill,fext]=fileparts(filename);
                     if strcmp(fext,'.json')
-                        options=spm_jsonread(filename);
+                        options=conn_jsonread(filename);
                     else
                         options=conn_loadcfgfile(filename,options);
                     end
@@ -500,7 +501,7 @@ switch(lower(option))
             else [varargout{1:nargout}]=conn_module_glminternal(varargin{:});
             end
             return            
-        else %if nargin>2&&ischar(varargin{1})&&(ismember(varargin{1},{'data','design','design_matrix','contrast_between','contrast_within','contrast_names','mask','data_labels','design_labels','analysistype','folder'})||isempty(dir(varargin{1}))) 
+        else 
             % syntax: conn_module glm fieldname1 fieldvalue1 ...
             n=0;
         end
@@ -608,7 +609,7 @@ switch(lower(option))
             for n1=1:size(Y,1),
                 missing=1:numel(cnames);
                 for n2=1:size(Y,2)
-                    data=load(Y{n1,n2},'SPM');
+                    data=conn_loadmatfile(Y{n1,n2},'SPM');
                     if isfield(data.SPM.xCon,'name')
                         names={data.SPM.xCon.name};
                         [ok,idx]=ismember(cnames(missing),names); % find in list of contrast names

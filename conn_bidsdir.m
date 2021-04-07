@@ -8,6 +8,14 @@ function [dataset,filter]=conn_bidsdir(filenames,varargin)
 %
 
 if nargin<1||isempty(filenames), filenames=pwd; end
+if any(conn_server('util_isremotefile',filenames)), 
+    [dataset,filter]=conn_server('run',mfilename,conn_server('util_localfile',filenames),varargin{:}); 
+    try
+        dataset.data.file=conn_server('util_remotefile',dataset.data.file);
+        dataset.dict.file=conn_server('util_remotefile',dataset.dict.file);
+    end
+    return; 
+end
 
 % bids filename spec 2018/7
 %spec={'sub','ses','task','acq','ce','rec','dir','run','mod','echo','recording','proc'};
@@ -52,7 +60,12 @@ if isstruct(filenames)
 else
     if iscell(filenames), files_all=conn_sortfilenames(filenames);
     else
-        files_all=conn_dir(fullfile(filenames,'sub-*'),'-cell','-inf','-sort');
+        dirs_all=conn_dir(fullfile(filenames,'sub-*'),'-cell','-R','-sort','-dir');
+        files_all={};
+        for n=1:numel(dirs_all)
+            tfiles_all=conn_dir(fullfile(dirs_all{n},'sub-*'),'-cell','-inf','-sort');
+            if ~isempty(tfiles_all), files_all=[files_all, reshape(tfiles_all,1,[])]; end
+        end
         if isempty(files_all),fprintf(sprintf('warning: no sub-* files found in %s',filenames));dataset=[];return;end
     end
     isgz=cellfun('length',regexp(files_all,'\.gz$'))>0;
@@ -80,6 +93,10 @@ else
     end
 end
 for n=[{'file','description','contents','folder','format','series'},spec] 
-    dataset.dict.(n{1})=unique(dataset.data.(n{1})(cellfun('length',dataset.data.(n{1}))>0))'; 
-    if isempty(dataset.dict.(n{1})), dataset.dict.(n{1})={}; end
+    [dataset.dict.(n{1}),nill,idx1]=unique(dataset.data.(n{1})(cellfun('length',dataset.data.(n{1}))>0)); 
+    if isempty(dataset.dict.(n{1})), dataset.dict.(n{1})={}; 
+    else
+        [nill,idx2]=sort(accumarray(idx1(:),1),'descend');
+        dataset.dict.(n{1})=reshape(dataset.dict.(n{1})(idx2),1,[]);
+    end
 end

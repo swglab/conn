@@ -365,6 +365,7 @@ else
         handle=length(CONN_MM.MENU)+1; 
         CONN_MM.POSITION(handle,:)=0;
         CONN_MM.ACTIVE(handle)=0;
+        fntnames={'Avenir','Helvetica'}; fntname=fntnames{end}; try, ok=ismember(fntnames,listfonts); if nnz(ok), fntname=fntnames{find(ok,1)}; end; end
         % note1: possible status are: [Mouse outside of item, Mouse inside item, Item selected and mouse inside item, Item selected and mouse outside item]
         params=struct(...
             'n',0,...                                           % number of items
@@ -383,7 +384,7 @@ else
             'horizontalalignment','center',...
             'transparent',1,...
             'fontcolor',[.75,.75,.75; 1,1,1;1,1,.9],...                             % 
-            'fontname','Arial',...                              % 
+            'fontname',fntname,...                              % 
             'fontsize',8,...									% 
             'fontweight','normal',...                             % 
             'fontangle','normal',...                             % 
@@ -491,7 +492,9 @@ else
                         end
                     end
                 end
-                
+                if ~iscell(CONN_MM.MENU{thishandle}.callback{n1})&&CONN_MM.MENU{thishandle}.order(1)~='h'
+                    try, ximage(round(size(ximage,1)/2)+(1:5),end-16:end-8,:)=.5; end
+                end
                 %CONN_MM.MENU{thishandle}.BINDEX(t3(n1)+1:t3(n1+1))=n1;
                 if CONN_MM.MENU{thishandle}.order(1)=='h', pos=[CONN_MM.MENU{thishandle}.position(1)+t4(n1)*CONN_MM.MENU{thishandle}.position(3), CONN_MM.MENU{thishandle}.position(2), CONN_MM.MENU{thishandle}.position(3)*(t4(n1+1)-t4(n1)), CONN_MM.MENU{thishandle}.position(4)];
                 else pos=[CONN_MM.MENU{thishandle}.position(1), CONN_MM.MENU{thishandle}.position(2)+CONN_MM.MENU{thishandle}.position(4)-t4(n1+1)*CONN_MM.MENU{thishandle}.position(4), CONN_MM.MENU{thishandle}.position(3), CONN_MM.MENU{thishandle}.position(4)*(t4(n1+1)-t4(n1))]; end

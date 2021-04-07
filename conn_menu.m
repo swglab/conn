@@ -1,10 +1,11 @@
 
-function [h,h2,htb]=conn_menu(type,position,title,string,tooltipstring,callback,callback2)
+function [h,h2,htb]=conn_menu(type,position,title,string,tooltipstring,callback,callback2,callback3)
 
 global CONN_gui CONN_h;
-persistent nullstr;
+persistent nullstr fname;
 
 if isempty(nullstr), nullstr=''; end
+if isempty(fname), fnames={'Avenir','Helvetica'}; fname=fnames{end}; try, ok=ismember(fnames,listfonts); if nnz(ok), fname=fnames{find(ok,1)}; end; end; end
 h=[];h2=[];htb=[];
 nmax=100;
 if nargin<2 || isempty(position), position=[0,0,0,0]; end
@@ -13,17 +14,18 @@ if nargin<4, string=''; end
 if nargin<5, tooltipstring=''; end
 if nargin<6, callback=''; end
 if nargin<7, callback2=''; end
+if nargin<8, callback3=''; end
 if ~ischar(type), [type,position,title]=deal(title,get(type,'userdata'),get(type,'value')); end
 if ~CONN_gui.tooltips, tooltipstring=''; end
-titleopts={'fontname','Arial','fontangle','normal','fontweight','bold','foregroundcolor',CONN_gui.fontcolorA,'fontsize',8+CONN_gui.font_offset};
+titleopts={'fontname',fname,'fontangle','normal','fontweight','bold','foregroundcolor',CONN_gui.fontcolorA,'fontsize',8+CONN_gui.font_offset};
 titleopts2=titleopts;titleopts2(7:8)={'color',CONN_gui.fontcolorA};
-contropts={'fontname','Arial','fontangle','normal','fontweight','normal','foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset};
+contropts={'fontname',fname,'fontangle','normal','fontweight','normal','foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset};
 contropts2=contropts;contropts2(7:8)={'color',CONN_gui.fontcolorA};
 contropts3=contropts([1:6 9:numel(contropts)]);
 doemphasis1=CONN_gui.doemphasis1;
 doemphasis2=CONN_gui.doemphasis2;
 %type=regexprep(type,'white','');
-if any(strcmpi(type,{'pushbutton2','togglebutton2','edit2','textedit2','listbox2','text2','title2','title2big','popup2','checkbox2','table2','image2','imagep2','imageonly2','frame2','frame2semiborder','frame2border','frame2noborder','frame2borderl','popup2big','popup2bigblue','popup2bigwhite','pushbuttonblue2'})), bgcolor=CONN_gui.backgroundcolor; mapcolor=CONN_h.screen.colormap;
+if any(strcmpi(type,{'pushbutton2','togglebutton2','edit2','textedit2','listbox2','text2','title2','title2big','popup2','checkbox2','table2','image2','imagep2','imageonly2','frame2','frame2semiborder','frame2border','frame2noborder','frame2borderl','frame2highlight','popup2big','popup2bigblue','popup2bigwhite','pushbuttonblue2'})), bgcolor=CONN_gui.backgroundcolor; mapcolor=CONN_h.screen.colormap;
 else bgcolor=CONN_gui.backgroundcolorA; mapcolor=CONN_h.screen.colormapA;
 end
 bgwhite=CONN_gui.backgroundcolorE; %.5*bgcolor+.5*round(bgcolor); %.9*bgcolor+.1*round(1-bgcolor); %[.95 .95 .9]
@@ -141,8 +143,10 @@ switch(lower(type)),
         conn_menumanager('onregion',ht,-1,get(h,'position'));
         if ~isempty(callback2), 
             if ~iscell(callback2), callback2={['h=get(gcbo,''userdata''); set(h,''value'',numel(cellstr(get(h,''string'')))); ',callback],callback2}; end
-            ht=[conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[0 -.04 .02-position(3) .04-position(4)],'','+',['Adds new ',lower(title)],callback2{1}),...
-                conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[.02 -.04 .02-position(3) .04-position(4)],'','-',['Removes selected ',lower(title)],['if isequal(conn_questdlg(''Are you sure you want to delete the selected ',lower(title),'?'','''',''Yes'',''No'',''Yes''),''Yes''), ',callback2{2},'; end'])];
+            ht=[conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[0 -.03 max(.02,position(3)-.02)-position(3) .03-position(4)],'','new',['Adds new ',lower(title)],callback2{1}),...
+                conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[max(.02,position(3)-.02) -.03 .02-position(3) .03-position(4)],'','-',['Removes selected ',lower(title)],['if isequal(conn_questdlg(''Are you sure you want to delete the selected ',lower(title),'?'','''',''Yes'',''No'',''Yes''),''Yes''), ',callback2{2},'; end'])];
+            %ht=[conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[0 -.04 .02-position(3) .04-position(4)],'','+',['Adds new ',lower(title)],callback2{1}),...
+            %    conn_menu(regexprep(type,{'bigblue','listbox'},{'','pushbuttonblue'}),position+[.02 -.04 .02-position(3) .04-position(4)],'','-',['Removes selected ',lower(title)],['if isequal(conn_questdlg(''Are you sure you want to delete the selected ',lower(title),'?'','''',''Yes'',''No'',''Yes''),''Yes''), ',callback2{2},'; end'])];
             set(ht,'userdata',h,'fontweight','bold','visible','off');
             conn_menumanager('onregion',ht,1,get(h,'position')+[0 -.04 0 0],h);
         end
@@ -308,7 +312,7 @@ switch(lower(type)),
 		h.h11=axes('units','norm','position',position+[.02*position(3),0,-.04*position(3),0],'color',bgcolor,'xtick',[],'ytick',[],'parent',CONN_h.screen.hfig); 
 		h.h12=patch(struct('vertices',[],'faces',[]),'edgecolor','none','facecolor','w','specularstrength',0,'backFaceLighting','lit','parent',h.h11);
         h.h13=[light('position',[1000 0 .1],'parent',h.h11) light('position',[-1000 0 .1],'parent',h.h11)];
-        hc1=uicontextmenu(CONN_h.screen.hfig);
+        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
         uimenu(hc1,'Label','Superior view','callback','set(gca,''cameraposition'',[0 0 1000],''cameraupvector'',[0 1 0])');
         uimenu(hc1,'Label','Inferior view','callback','set(gca,''cameraposition'',[0 0 -1000],''cameraupvector'',[0 1 0])');
         uimenu(hc1,'Label','Anterior view','callback','set(gca,''cameraposition'',[0 1000 0],''cameraupvector'',[0 0 1])');
@@ -329,7 +333,7 @@ switch(lower(type)),
         [h.h9,nill,h.h9a]=conn_menu(regexprep(type,{'imagep?','0$'},{'edit',''}),[position(1)-.015-.03,position(2)+position(4)*.85-.02,.03,.035],'',mat2str(data.cscale,2),'display colorscale',{@conn_menu,'updatecscale'});
         set(h.h9,'fontsize',6+CONN_gui.font_offset,'horizontalalignment','right');
         [h.h10,nill,h.h10a]=conn_menu(regexprep(type,{'imagep?','0$'},{'edit',''}),[position(1)+position(3)/2,position(2)-1*.05,min(position(3)/4,.05),.04],'',num2str(data.thr),'display threshold',{@conn_menu,'updatethr'});
-		h.h6a=uicontrol('units','norm','position',[.0001 .0001 .0001 .0001],'style','text','fontsize',8+CONN_gui.font_offset,'foregroundcolor','k','backgroundcolor','w','horizontalalignment','left','parent',CONN_h.screen.hfig); 
+		h.h6a=uicontrol('units','norm','position',[.0001 .0001 .0001 .0001],'style','text','fontsize',8+CONN_gui.font_offset,'foregroundcolor',.75*[1 1 1],'backgroundcolor',.25*[1 1 1],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
         conn_menumanager('onregion',h.h6a,1,position,h.h2,@(varargin)conn_menubuttonmtnfcn('volume',CONN_h.screen.hfig,h.h1,h.h2,h.h6a,h.h2c,varargin{:}));
 		h.h6b=uicontrol('units','norm','position',[.0001 .0001 .0001 .0001],'style','text','fontsize',8+CONN_gui.font_offset,'foregroundcolor','k','backgroundcolor','w','horizontalalignment','left','parent',CONN_h.screen.hfig); 
         if ~isempty(h.h3), 
@@ -340,6 +344,7 @@ switch(lower(type)),
         conn_menumanager('onregion',h.h6c,1,position,h.h12,@(varargin)conn_menubuttonmtnfcn('patch',CONN_h.screen.hfig,h.h11,h.h12,h.h6c,[],varargin{:}));
         h.hcallback=callback;
         h.hcallback2=callback2;
+        h.hcallback3=callback3;
 		%h.h9=uicontrol('style','edit','units','norm','position',[position(1)-.015,position(2)+position(4),.02,.04],'callback',{@conn_menu,'updatecscale'},'backgroundcolor',bgcolor,'string',num2str(data.cscale),'fontsize',8+CONN_gui.font_offset); 
 		%h.h10=uicontrol('style','edit','units','norm','position',[position(1)+position(3)-.1,position(2)-1*.05,.1,.04],'callback',{@conn_menu,'updatethr'},'backgroundcolor',bgcolor,'foregroundcolor',.0+1.0*([0 0 0]+(mean(bgcolor)<.5)),'string',num2str(data.thr),'fontsize',8+CONN_gui.font_offset); 
 		set(h.h1,'color',bgcolor,'xtick',[],'ytick',[],'xcolor',bgcolor,'ycolor',bgcolor); 
@@ -431,6 +436,14 @@ switch(lower(type)),
         h.mapcolor=mapcolor;
 		set(h.h1,'color',CONN_gui.backgroundcolor,'ytick',[],'xcolor',.5+0.0*([0 0 0]+(mean(CONN_gui.backgroundcolor)<.5)),'ycolor',CONN_gui.backgroundcolor,'visible','off'); 
         set([h.h1,h.h2,h.h3,h.h4,h.h5,h.h6,h.h7],'visible','off');
+	case 'filesearchprojectload',
+        %if ~isequal(CONN_h.screen.hfig,gcf), figure(CONN_h.screen.hfig); end
+		h=conn_filesearchtool('position',[.40,.10,.20,.65],'backgroundcolor',CONN_gui.backgroundcolor,titleopts{:},...
+			'title',title,'filter',string,'callback',callback,'max',1,'reduced',true,'button','Open','buttonhelp','Loads selected CONN project');
+	case 'filesearchprojectsave',
+        %if ~isequal(CONN_h.screen.hfig,gcf), figure(CONN_h.screen.hfig); end
+		h=conn_filesearchtool('position',[.40,.10,.20,.65],'backgroundcolor',CONN_gui.backgroundcolor,titleopts{:},...
+			'title',title,'filter',string,'callback',callback,'max',1,'type','files','filename',tooltipstring,'reduced',true,'button','Save','buttonhelp','Saves new CONN project');
 	case 'filesearch',
         %if ~isequal(CONN_h.screen.hfig,gcf), figure(CONN_h.screen.hfig); end
 		h=conn_filesearchtool('position',[.78,.10,.20,.75],'backgroundcolor',CONN_gui.backgroundcolor,titleopts{:},...
@@ -454,7 +467,7 @@ switch(lower(type)),
         else fgcolor=[]; 
         end
         
-        bordercolor=[]; if ~isempty(regexp(type,'highlight')), bordercolor=0*bgcolor+1*round(1-bgcolor); type=regexprep(type,'highlight',''); end
+        bordercolor=[]; if ~isempty(regexp(type,'highlight')), bordercolor=0*(1-bgcolor)+0*round(bgcolor)+CONN_gui.backgroundcolorE; type=regexprep(type,'highlight',''); end
         
 		if ~isempty(title), 
             if 0
@@ -479,7 +492,7 @@ switch(lower(type)),
                 h2=uicontrol('style','frame','units','norm','position',temp,'backgroundcolor',bg2,'foregroundcolor',bg2,'parent',CONN_h.screen.hfig);
                 h2=uicontrol('style','text','units','norm','position',temp+[0 .005 0 -.01],'string',title,titleopts{:},'backgroundcolor',bg2,'units','norm','horizontalalignment','center','parent',CONN_h.screen.hfig);%,'fontweight','bold');
                 if ~isempty(fgcolor), set(h2,'foregroundcolor',fgcolor); end
-                if 1||strcmpi(type,'frame'), set(h2,'fontsize',12+CONN_gui.font_offset); end %,'foregroundcolor',CONN_gui.backgroundcolorE,'backgroundcolor',bgcolor); end %,'fontweight','bold'); end 
+                if 1||strcmpi(type,'frame'), set(h2,'fontsize',18+CONN_gui.font_offset,'fontweight','normal'); end %,'foregroundcolor',CONN_gui.backgroundcolorE,'backgroundcolor',bgcolor); end %,'fontweight','bold'); end 
             else
                 %h2=conn_menu('pushbutton2',(position+[0,position(4),0,0]).*[1,1,1,0]+[0,0*.01,0,.04],'',title);
                 h2=uicontrol('style','pushbutton','units','norm','position',(position+[0,position(4),0,0]).*[1,1,1,0]+[0,0*.01,0,.04],'string',title,titleopts{:},'backgroundcolor',CONN_gui.backgroundcolor,'units','norm','horizontalalignment','center','parent',CONN_h.screen.hfig);
@@ -497,7 +510,7 @@ switch(lower(type)),
             if extendshade, position=position+[0 0 0 .05]; end
             ht2=axes('units','norm','position',position,'parent',CONN_h.screen.hfig);
             set(ht2,'unit','pixels');
-            bscale=.75;
+            bscale=1;%.75;
             tpos=get(ht2,'position')+14*[-1 -1 2 2]*bscale; 
             %if extendshade, tpos(4)=(tpos(4)-1*24)*(1+.04/position(4))+1*24; end
             %tpos=get(ht2,'position')+1*[-8 -12 20 20];
@@ -513,11 +526,11 @@ switch(lower(type)),
             if strcmpi(type,'frame'), 
                 bg2=0*max(0,min(1,CONN_gui.backgroundcolor)); lw2=3; % border emphasis
             elseif strcmpi(type,'frame2border')
-                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=2;
+                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=3;
             elseif strcmpi(type,'frame2borderl')
-                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=2;
+                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=3;
             else
-                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=2;
+                bg2=.75*max(0,min(1,CONN_gui.backgroundcolor)); lw2=3;
             end
             if strcmpi(type,'frame2border'),%||strcmpi(type,'frame2borderl')
                 [i,j]=ndgrid([0:2:tpos(4) tpos(4):-2:0],[0:2:tpos(3) tpos(3):-2:0]);
@@ -528,7 +541,7 @@ switch(lower(type)),
             else
                 b1=bgcolor;
                 %set(ht2,'visible','off','units','norm');
-                t=linspace(0,pi/2,32);tA=30*tpos(3:4)/min(tpos(3:4));
+                t=linspace(0,pi/2,32);tA=30*tpos(3:4)/max(300,min(tpos(3:4)));
                 %h3=patch([1 tA(1)-1 tA(1)-1+cos(3*pi/2+t) tA(1) tA(1) tA(1)-1+cos(t) tA(1)-1 1 1+cos(pi/2+t) 0 0 1+cos(pi+t)],[0 0 1+sin(3*pi/2+t) 1 tA(2)-1 tA(2)-1+sin(t) tA(2) tA(2) tA(2)-1+sin(pi/2+t) tA(2)-1 1 1+sin(pi+t)],'k','edgecolor',bg2,'facecolor',bgcolor,'linewidth',lw2,'parent',ht2);
                 h3a=patch([1 tA(1)-1 tA(1)-1+cos(3*pi/2+t) tA(1) tA(1) tA(1)-1+cos(t) tA(1)-1 1 1+cos(pi/2+t) 0 0 1+cos(pi+t)],[0 0 1+sin(3*pi/2+t) 1 tA(2)-1 tA(2)-1+sin(t) tA(2) tA(2) tA(2)-1+sin(pi/2+t) tA(2)-1 1 1+sin(pi+t)],'k','edgecolor','none','facecolor',bgcolor,'linewidth',lw2,'parent',ht2);
                 %if strcmpi(type,'frame'),hold(ht2,'on'); plot([1 tA(1)-1 tA(1)-1+cos(3*pi/2+t) tA(1) tA(1) tA(1)-1+cos(t) tA(1)-1 1 1+cos(pi/2+t) 0 0 1+cos(pi+t)],[0 0 1+sin(3*pi/2+t) 1 tA(2)-1 tA(2)-1+sin(t) tA(2) tA(2) tA(2)-1+sin(pi/2+t) tA(2)-1 1 1+sin(pi+t)],'k','color',0*bg2,'linewidth',lw2,'parent',ht2); hold(ht2,'off'); end
@@ -590,12 +603,12 @@ switch(lower(type)),
 			set([position.h1,position.h2,position.h3,position.h4,position.h5,position.h6,position.h7],'visible','off'); 
         else 
             skiptitles=false;
-            set(position.h3,'xdata',title{1},'ydata',title{2},'facecolor',1/2*[1,1,0],'facealpha',1,'edgecolor','none');
+            set(position.h3,'xdata',title{1},'ydata',title{2},'facecolor',[.5,.5,0],'facealpha',1,'edgecolor','none');
             if numel(title)<3, title{3}=title{2}; skiptitles=true; subtitle=''; 
             elseif ischar(title{3}), skiptitles=true; subtitle=title{3}; title{3}=title{2}; 
             end
-            set(position.h4,'xdata',title{1},'ydata',title{3},'facecolor',.75/2*[1,1,1],'facealpha',1,'edgecolor','none');
-            set(position.h5,'xdata',title{1},'ydata',min(title{2},title{3}),'facecolor',[.2,.2,.4],'facealpha',1,'edgecolor','none');
+            set(position.h4,'xdata',title{1},'ydata',title{3},'facecolor',[.35,.35,.35],'facealpha',1,'edgecolor','none');
+            set(position.h5,'xdata',title{1},'ydata',min(title{2},title{3}),'facecolor',.75*[.35,.35,.35]+.25*[.5,.5,0],'facealpha',1,'edgecolor','none');
             set(position.h2,'xdata',[0,0],'ydata',[0,max(max(title{2}),max(title{3}))*1.35],'color','w');
             axis(position.h1,'tight');
             [nill,idxtemp]=max(title{3});
@@ -693,7 +706,7 @@ switch(lower(type)),
                 icon=[];
                 try
                     if isstruct(title)&&isfield(title(1),'fname')&&~isempty(title(1).fname)&&conn_existfile(conn_prepend('',title(1).fname,'.icon.jpg'))
-                        icon=imread(conn_prepend('',title(1).fname,'.icon.jpg'),'jpg');
+                        icon=conn_fileutils('imread',conn_prepend('',title(1).fname,'.icon.jpg'),'jpg');
                     end
                 end
                 if isstruct(title)&&isfield(title,'vertices') % patch
@@ -726,15 +739,15 @@ switch(lower(type)),
                         if conn_surf_dimscheck(title(1).dim), %if isequal(title(1).dim,conn_surf_dims(8).*[1 1 2]) % surface
                             if length(title)>1,
                                 volhdr=title(1);
-                                temp1=spm_read_vols(title(1));
+                                temp1=conn_fileutils('spm_read_vols',title(1));
                                 temp1=reshape(temp1(:,:,[1,size(temp1,3)/2+1],:),size(temp1,1)*size(temp1,2),2,1,[]);
-                                temp2=spm_read_vols(title(end));
+                                temp2=conn_fileutils('spm_read_vols',title(end));
                                 temp2=reshape(temp2(:,:,[1,size(temp2,3)/2+1],:),size(temp2,1)*size(temp2,2),2,1,[]);
                                 temp=cat(4,temp1,temp2);
                                 title={CONN_gui.refs.surf.defaultreduced,temp(CONN_gui.refs.surf.default2reduced,:,:,:),abs(temp(CONN_gui.refs.surf.default2reduced,:,:,:))};
                             else
                                 volhdr=title(1);
-                                temp=spm_read_vols(title);
+                                temp=conn_fileutils('spm_read_vols',title);
                                 temp=reshape(temp,size(CONN_gui.refs.surf.default(1).vertices,1),2,1,[]);
                                 title={CONN_gui.refs.surf.default,temp,abs(temp)};
                                 %temp=reshape(temp(:,:,[1,size(temp,3)/2+1],:),size(temp,1)*size(temp,2),2,1,[]);
@@ -748,12 +761,16 @@ switch(lower(type)),
                             string={volhdr,[]};
                         else
                             if length(title)>1,
-                                newtitle=[];
-                                for n=reshape(unique(round(linspace(1,length(title),position.maxvolsdisplayed))),1,[])
-                                    [temp,volhdr]=conn_spm_read_vols(title(n));
-                                    newtitle=cat(4,newtitle,permute(temp,[2,1,3]));
+                                if 0
+                                    newtitle=[];
+                                    for n=reshape(unique(round(linspace(1,length(title),position.maxvolsdisplayed))),1,[])
+                                        [temp,volhdr]=conn_spm_read_vols(title(n));
+                                        newtitle=cat(4,newtitle,permute(temp,[2,1,3]));
+                                    end
+                                    title=newtitle;
+                                else
+                                    [title,volhdr]=conn_spm_read_vols(title(reshape(unique(round(linspace(1,length(title),position.maxvolsdisplayed))),1,[])));
                                 end
-                                title=newtitle;
 %                             elseif length(title)>1,
 %                                 [temp1,volhdr1]=conn_spm_read_vols(title(1));
 %                                 [temp2,volhdr2]=conn_spm_read_vols(title(end));
@@ -766,10 +783,11 @@ switch(lower(type)),
                             %title0=title;titleTHR=title;
                         end
                     end
-					%title=permute(spm_read_vols(title),[2,1,3,4]); 
+					%title=permute(conn_fileutils('spm_read_vols',title),[2,1,3,4]); 
 				end
 				%if size(title,4)>1, title=cat(2,title(:,:,:,end),title(:,:,:,1)); end
-                if isstruct(title), data.x1=title;
+                if isstruct(title)&&isfield(title,'vol'), data.x1=title;
+                elseif isstruct(title), data.x1=title;
                 else
                     title(isnan(title))=0;
                     if sum(title(:)<0)/sum(title(:)>0)<1e-2, data.x1=max(1,min(128, round(1+127*(title)/max(eps,max(max(title(:)))) )));
@@ -780,13 +798,13 @@ switch(lower(type)),
                     %end
                     %data.x1=round(1+127*(title-min(title(:)))/max(max(title(:))-min(title(:)),eps));
                 end
-				if size(data.x1,3)>1, if ~isfield(data,'view')||isempty(data.view), data.view=3-~isempty(icon); end; data.viewselect=true;
+				if size(data.x1,3)>1||(isstruct(title)&&isfield(title,'vol')), if ~isfield(data,'view')||isempty(data.view), data.view=3-~isempty(icon); end; data.viewselect=true;
                 else data.view=3; data.viewselect=false;
                 end
                 xslice={'change coronal slice','change sagittal slice','change axial slice'};
                 set(position.h5,'tooltipstring',xslice{data.view});
-				if ~isfield(data,'n')||isempty(data.n), if numel(title)==4, data.n=1; else data.n=ceil(size(title,data.view)/2); end; end
-				data.n=max(1,min(size(title,data.view),data.n));
+				if ~isfield(data,'n')||isempty(data.n), if isstruct(title)&&isfield(title,'vol'), data.n=ceil(title(1).dim(max(1,min(numel(title(1).dim),data.view)))/2); elseif numel(title)==4, data.n=1; else data.n=ceil(size(title,data.view)/2); end; end
+				if isstruct(title)&&isfield(title,'vol'), data.n=max(1,min(title(1).dim(max(1,min(numel(title(1).dim),data.view))),data.n)); else data.n=max(1,min(size(title,data.view),data.n)); end
                 %data.x1=round(1+127*max(0,min(1,title)));
 				if ~isempty(title0),
 					data.x0=title0; %max(-1,min(1,title0)); % x1: structural; x0: activation; xTHR: p-value
@@ -803,13 +821,17 @@ switch(lower(type)),
 					data.x0=[]; 
 					set([position.h7,position.h8,position.h8a,position.h9,position.h9a,position.h10,position.h10a],'visible','off');
 				end
-				if size(data.x1,data.view)>1, 
+				if isfield(data.x1,'vol')||size(data.x1,data.view)>1, 
                     conn_menumanager('onregionremove',position.h5);
                     conn_menumanager('onregionremove',position.h5b);
-					set(position.h5,'min',1,'max',size(data.x1,data.view),'sliderstep',min(1,[1,10]/(size(data.x1,data.view)-1)),'value',data.n,'visible','off');
+                    if isstruct(title)&&isfield(title,'vol'), set(position.h5,'min',1,'max',data.x1.rdim(data.view),'sliderstep',min(1,[1,10]/(data.x1.rdim(data.view)-1)),'value',data.n,'visible','off');
+                    else set(position.h5,'min',1,'max',size(data.x1,data.view),'sliderstep',min(1,[1,10]/(size(data.x1,data.view)-1)),'value',data.n,'visible','off');
+                    end
                     set(position.h5b,'visible','off');
-                    if isstruct(title), conn_menumanager('onregion',[position.h5],1,get(position.h1,'position')+[0 0 .015 0]);
-                    else conn_menumanager('onregion',[position.h5,position.h5b],1,get(position.h1,'position')+[0 0 .015 0]);
+                    if isstruct(title)&&~isfield(title,'vol'), 
+                        conn_menumanager('onregion',[position.h5],1,get(position.h1,'position')+[0 0 .015 0]);
+                    else
+                        conn_menumanager('onregion',[position.h5,position.h5b],1,get(position.h1,'position')+[0 0 .015 0]);
                     end
                 else
                     set([position.h5,position.h5b],'visible','off');
@@ -817,7 +839,7 @@ switch(lower(type)),
                     conn_menumanager('onregionremove',position.h5b);
                 end
                 n1n2=[1 1];
-                if isstruct(title)
+                if isstruct(title)&&~isfield(title,'vol') % surf
                     if size(data.x0,4)>1
                         mv=mean(title(data.n).vertices,1);
                         rv=max(title(data.n).vertices,[],1)-min(title(data.n).vertices,[],1);
@@ -866,9 +888,9 @@ switch(lower(type)),
                     else set(position.h11,'cameraPosition',[1000-2000*rem(data.n,2) 0 .1],'cameraupvector',[0 0 1]);
                     end
                     %set(position.h13,'position',[1000-2000*rem(data.n,2) 0 .1]);
-                else
+                else % volume
                     %title=fliplr(flipud(data.x1(:,:,data.n,:)));
-                    title=conn_menu_selectslice(data.x1,data.n,data.view);
+                    title=conn_menu_selectslice(data.x1,data.n,data.view); 
                     c1=zeros(2,0);c2=zeros(2,0); c1c=[0 0 0]; c2c=[0 0 0]; n1n2=[1 1];
                     if ~isempty(data.x0),
                         %title0=fliplr(flipud(data.x0(:,:,data.n,:))); %if all(size(title)==2*size(title0)-1), title0=interp2(title0,'nearest'); end
@@ -991,9 +1013,11 @@ switch(lower(type)),
             data=get(position.h2,'userdata');
             if data.viewselect
                 data.view=1+mod(data.view,3);
-                data.n=max(1,min(size(data.x1,data.view), data.n));
+                if isstruct(data.x1)&&isfield(data.x1,'vol'), data.n=max(1,min(data.x1(1).rdim(max(1,min(numel(data.x1(1).rdim),data.view))),data.n)); else data.n=max(1,min(size(data.x1,data.view), data.n)); end
                 xslice={'change coronal slice','change sagittal slice','change axial slice'};
-                set(position.h5,'min',1,'max',size(data.x1,data.view),'sliderstep',min(1,[1,10]/(size(data.x1,data.view)-1)),'value',data.n,'tooltipstring',xslice{data.view});
+                if isstruct(data.x1)&&isfield(data.x1,'vol'), set(position.h5,'min',1,'max',data.x1(1).rdim(data.view),'sliderstep',min(1,[1,10]/(data.x1(1).rdim(data.view)-1)),'value',data.n,'tooltipstring',xslice{data.view});
+                else set(position.h5,'min',1,'max',size(data.x1,data.view),'sliderstep',min(1,[1,10]/(size(data.x1,data.view)-1)),'value',data.n,'tooltipstring',xslice{data.view});
+                end
                 set(position.h2,'userdata',data);
             end
         end
@@ -1022,13 +1046,13 @@ switch(lower(type)),
             data=get(position.h2,'userdata');
         end
         if strcmpi(type,'updateslider1')
-            data.n=max(1,min(size(data.x1,data.view), round(title)));
+            if isstruct(data.x1)&&isfield(data.x1,'vol'), data.n=max(1,min(data.x1(1).rdim(max(1,min(numel(data.x1(1).rdim),data.view))),round(title))); else data.n=max(1,min(size(data.x1,data.view), round(title))); end
         end
         if strcmpi(type,'updateslider2')
             data.thr=max(0,min(1, title));
         end
         if isfield(data,'thr'), set(position.h10,'string',num2str(data.thr)); end
-        if isstruct(data.x1)
+        if isstruct(data.x1)&&~isfield(data.x1,'vol') % surface
             title=data.x1;
             if size(data.x0,4)>1
                 mv=mean(title(data.n).vertices,1);
@@ -1137,6 +1161,12 @@ switch(lower(type)),
                 data.buttondown.matdim.dim(4:5)=n1n2(1:2); 
             end
         end
+        if strcmpi(type,'updatethr')&&isfield(position,'hcallback3')&&~isempty(position.hcallback3), 
+            if isa(position.hcallback3,'function_handle'), feval(position.hcallback3);
+            elseif iscell(position.hcallback3), feval(position.hcallback3{:}); 
+            elseif ischar(position.hcallback3), eval(position.hcallback3);
+            end
+        end
 		set([position.h2 position.h6a position.h6b position.h6c],'userdata',data);
 end
 end
@@ -1192,19 +1222,29 @@ try
     if xyz_scale==.25, conn_disp('warning: Volume too big. Displaying only a portion of the original volume'); end
     xyz=xyz/xyz_scale; % scale/center to fit
     xyz_center=mean(xyz,2);
-    xyz_center=xyz_center(1:3)-(v1dim+1)/2;
-    %xyz(1:3,:)=conn_bsxfun(@minus,xyz(1:3,:),xyz_center);
-    x=double(spm_sample_vol(v,xyz(1,:)-xyz_center(1),xyz(2,:)-xyz_center(2),xyz(3,:)-xyz_center(3),1));
+    xyz_center=xyz_center(1:3)-(v1dim+1)/2; % center-ref wrt center-vol
+    if 0, x=double(conn_fileutils('spm_sample_vol',v,xyz(1,:)-xyz_center(1),xyz(2,:)-xyz_center(2),xyz(3,:)-xyz_center(3),1));
+    else x=struct('vol',v,'dim',CONN_gui.refs.canonical.V.dim,'x',reshape(xyz(1,:)-xyz_center(1),CONN_gui.refs.canonical.V.dim),'y',reshape(xyz(2,:)-xyz_center(2),CONN_gui.refs.canonical.V.dim),'z',reshape(xyz(3,:)-xyz_center(3),CONN_gui.refs.canonical.V.dim),'rdim',CONN_gui.refs.canonical.V.dim([2 1 3]));
+    end
 catch
     error('Error reading file %s. File may have been modified or relocated. Please load file again',v(1).fname);
 end
-%x=spm_get_data(v,xyz);
-x=permute(reshape(x,[numel(v),CONN_gui.refs.canonical.V.dim]),[2,3,4,1]);
+if 0, x=permute(reshape(x,[numel(v),CONN_gui.refs.canonical.V.dim]),[2,3,4,1]); end
 matdim=struct('dim',CONN_gui.refs.canonical.V.dim,'mat',v(1).mat*[[eye(3) -xyz_center(:)];[0 0 0 1]]*[[eye(3)/xyz_scale zeros(3,1)];[zeros(1,3) 1]]*pinv(v(1).mat)*CONN_gui.refs.canonical.V.mat);
 end
 
 function y=conn_menu_selectslice(x,n,dim)
-if isstruct(x)
+if isstruct(x)&&isfield(x,'vol')
+    switch(dim),
+        case 2, y=[]; for nv=1:numel(x.vol), ty=reshape(conn_fileutils('spm_sample_vol',x.vol(nv),reshape(x.x(n,:,:),1,[]),reshape(x.y(n,:,:),1,[]),reshape(x.z(n,:,:),1,[]),1),x.dim([2 3])); y=cat(4,y,ty(end:-1:1,end:-1:1)'); end
+        case 1, y=[]; for nv=1:numel(x.vol), ty=reshape(conn_fileutils('spm_sample_vol',x.vol(nv),reshape(x.x(:,n,:),1,[]),reshape(x.y(:,n,:),1,[]),reshape(x.z(:,n,:),1,[]),1),x.dim([1 3])); y=cat(4,y,ty(end:-1:1,end:-1:1)'); end
+        case 3, y=[]; for nv=1:numel(x.vol), ty=reshape(conn_fileutils('spm_sample_vol',x.vol(nv),reshape(x.x(:,:,n),1,[]),reshape(x.y(:,:,n),1,[]),reshape(x.z(:,:,n),1,[]),1),x.dim([1 2])); y=cat(4,y,ty(end:-1:1,end:-1:1)'); end
+    end    
+    if sum(y(:)<0)/sum(y(:)>0)<1e-2, y=max(1,min(128, round(1+127*(y)/max(eps,max(max(y(:)))) )));
+    else y=max(1,min(128, round(1+127*(y-min(min(y(:))))/max(eps,max(max(y(:)))-min(min(y(:)))) )));
+    end
+    %y=max(1,min(128, round(1+127*(y)/max(eps,max(max(y(:)))) )));
+elseif isstruct(x)
     y=x;
     if isfield(x,'mat0'), y.mat=y.mat0; end
     if isfield(x,'dim0'), y.dim=y.dim0; end

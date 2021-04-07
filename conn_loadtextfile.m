@@ -1,4 +1,4 @@
-function tdata = conn_loadtextfile(tfilename,okstruct)
+function tdata = conn_loadtextfile(tfilename,okstruct,varargin)
 % loads text/mat file (.mat .txt .csv .tsv .json)
 % data = conn_loadtextfile(filename)
 %
@@ -9,17 +9,40 @@ function tdata = conn_loadtextfile(tfilename,okstruct)
 % see spm_load
 
 if nargin<2||isempty(okstruct), okstruct=true; end
+if any(conn_server('util_isremotefile',tfilename)), 
+    DOCACHE=false;
+    if ~isempty(varargin)&&any(cellfun(@(x)isequal(x,'-cache'),varargin)), DOCACHE=true; 
+    else
+        try
+            info=conn_fileutils('dir',tfilename);
+            DOCACHE=info.bytes>1e6;
+        end
+    end
+    if DOCACHE
+        tfilename=conn_cache('pull',tfilename);
+    else
+        tdata=conn_server('run',mfilename,conn_server('util_localfile',tfilename),okstruct);
+        return
+    end
+end
+
 if ischar(okstruct), v=okstruct; okstruct=true; 
 elseif ischar(tfilename)&&any(tfilename==',')
     tfields=regexp(tfilename,',','split');
-    assert(numel(tfields)==2,'unable to interpret filename %s',tfields);
+    assert(numel(tfields)==2,'unable to interpret filename %s',tfilename);
     tfilename=tfields{1};
     v=tfields{2};
 else v='';
 end
-try, tdata=spm_load(tfilename,v);
+try, 
+    if ischar(tfilename)&&~isempty(tfilename)&&~isempty(regexp(tfilename,'\.mat$')) % bugfix older spm
+        tdata=load(tfilename,'-mat');
+    else
+        tdata=spm_load(tfilename,v);
+    end
 catch,
     tdata=regexp(fileread(tfilename),'[\r\n]+','split');
+    tdata=regexprep(tdata,'\<n/a\>','nan');
     tdata=tdata(cellfun('length',tdata)>0);
     vdata=cellfun(@str2num,tdata,'uni',0);
     if numel(tdata)>1&&isequal(find(cellfun('length',vdata)==0),1), tnames=tdata{1}; tdata=cat(1,vdata{2:end}); 
@@ -32,6 +55,11 @@ catch,
         idx=find(strcmp(tnames,v));
         assert(numel(idx)==1, 'unable to find field %s in %s',v,tfilename);
         vdata=vdata(:,idx);
+    elseif okstruct&&~isempty(tnames)
+        try
+            tnames=regexp(tnames,'[\s,\t]+','split');
+            tdata=cell2struct(num2cell(tdata,1),tnames,2);
+        end
     end        
 end
 if isstruct(tdata)&&~okstruct,

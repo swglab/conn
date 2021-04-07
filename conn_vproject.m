@@ -16,6 +16,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
     if isstruct(nonparam), ARG=nonparam; end;
 	OPTION=views; 
     if nargin>3, OPTION2=projection; else OPTION2=''; end
+    if nargin>4, OPTION3=thres; else OPTION3=''; end
     if isempty(OPTION), return; end
     DATA=get(GCF,'userdata');
     a=DATA.a;
@@ -209,7 +210,8 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 end
                 if ischar(filename),
                     data=rmfield(DATA,'handles');
-                    save(fullfile(filepath,filename),'data');
+                    data=rmfield(DATA,'axes');
+                    conn_savematfile(fullfile(filepath,filename),'data');
                     conn_disp('fprintf','Results structure file saved as %s\n',fullfile(filepath,filename));
                 end
             case {'export','export_mask','export_mask_selected'},
@@ -240,30 +242,33 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                     end
                     descrip=sprintf('%s ; %s',descrip1,descrip2);                    
                     V=struct('mat',mat{1},'dim',size(b(:,:,:,1)),'dt',[spm_type('float32') spm_platform('bigend')],'fname',fullfile(filepath,filename),'descrip',descrip);
-                    V=spm_write_vol(V,maskselected.*tempT.*double(b(:,:,:,end)>0));
-                    try, spm_jsonwrite(conn_prepend('',fullfile(filepath,filename),'.json'),struct('description',sprintf('%s ; %s ; %s',descrip1,descrip2,descrip3)),struct('indent',' ')); end
+                    V=conn_fileutils('spm_write_vol',V,maskselected.*tempT.*double(b(:,:,:,end)>0));
+                    try, conn_fileutils('spm_jsonwrite',conn_prepend('',fullfile(filepath,filename),'.json'),struct('description',sprintf('%s ; %s ; %s',descrip1,descrip2,descrip3)),struct('indent',' ')); end
                     conn_disp('fprintf','Suprathreshold stats file saved as %s\n',V.fname);
                     
                     V=struct('mat',mat{1},'dim',size(b(:,:,:,1)),'dt',[spm_type('float32') spm_platform('bigend')],'fname',fullfile(filepath,[filename_name,'.Mask.nii']),'descrip',descrip);
-                    V=spm_write_vol(V,maskselected.*double(b(:,:,:,end)>0));
+                    V=conn_fileutils('spm_write_vol',V,maskselected.*double(b(:,:,:,end)>0));
                     %conn_disp('fprintf','Mask file saved as %s\n',V.fname);
-                    try, spm_jsonwrite(fullfile(filepath,[filename_name,'.json']),struct('HeightThreshold',descrip1,'SizeThreshold',descrip2,'Stats',descrip3)); end
+                    try, conn_fileutils('spm_jsonwrite',fullfile(filepath,[filename_name,'.json']),struct('HeightThreshold',descrip1,'SizeThreshold',descrip2,'Stats',descrip3)); end
                     
                     V=struct('mat',mat{1},'dim',size(b(:,:,:,1)),'dt',[spm_type('float32') spm_platform('bigend')],'fname',fullfile(filepath,[filename_name,'.nonthr.nii']),'descrip',descrip);
-                    V=spm_write_vol(V,tempT);
+                    V=conn_fileutils('spm_write_vol',V,tempT);
                     %conn_disp('fprintf','Non-thresholded stats file saved as %s\n',V.fname);
                     
                     V=struct('mat',mat{1},'dim',size(b(:,:,:,1)),'pinfo',[1;0;0],'dt',[spm_type('uint32') spm_platform('bigend')],'fname',fullfile(filepath,[filename_name,'.ROIs.nii']),'descrip',descrip);
                     btemp=zeros(size(b(:,:,:,1)));
                     for nbtemp=1:numel(DATA.clusters), btemp(DATA.clusters{nbtemp})=nbtemp; end
-                    V=spm_write_vol(V,btemp);
+                    V=conn_fileutils('spm_write_vol',V,btemp);
                     conn_disp('fprintf','ROI file saved as %s\n',V.fname);
-                    fh=fopen(fullfile(filepath,[filename_name,'.ROIs.txt']),'wt');
+                    str={};
+                    %fh=fopen(fullfile(filepath,[filename_name,'.ROIs.txt']),'wt');
                     for nbtemp=1:numel(DATA.clusters),
-                        fprintf(fh,'%+d ',[DATA.xyzpeak{nbtemp},1]*DATA.mat{1}(1:3,:)');
-                        fprintf(fh,'\n');
+                        str{end+1}=sprintf('%+d ',[DATA.xyzpeak{nbtemp},1]*DATA.mat{1}(1:3,:)');
+                        str{end+1}=sprintf('\n');
                     end
-                    fclose(fh);
+                    %fclose(fh);
+                    conn_fileutils('filewrite_raw',fullfile(filepath,[filename_name,'.ROIs.txt']),str);
+
 
                     if (DATA.thres{2}==3||DATA.thres{2}==4), 
                         [tx,ty,tz]=ind2sub(size(b(:,:,:,1)), find(DATA.f&b(:,:,:,end)>0));
@@ -273,19 +278,21 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                     
                     try, conn_exportlist(DATA.handles(8),fullfile(filepath,[filename_name,'.Table.txt']),get(DATA.handles(7),'string')); end
                     try
-                        fh=fopen(fullfile(filepath,[filename_name,'.Table.txt']),'at');
-                        fprintf(fh,'\n\n');
+                        %fh=fopen(fullfile(filepath,[filename_name,'.Table.txt']),'at');
+                        str={};
+                        str{end+1}=sprintf('\n\n');
                         for nbtemp=1:numel(DATA.clusters),
-                            fprintf(fh,'\nCluster ');
-                            fprintf(fh,'%+d ',[DATA.xyzpeak{nbtemp},1]*DATA.mat{1}(1:3,:)');
-                            fprintf(fh,' :\n');
-                            str=cellstr(DATA.clusternames{nbtemp}.txt);
-                            for n=1:numel(str),fprintf(fh,'%s\n',str{n});end
+                            str{end+1}=sprintf('\nCluster ');
+                            str{end+1}=sprintf('%+d ',[DATA.xyzpeak{nbtemp},1]*DATA.mat{1}(1:3,:)');
+                            str{end+1}=sprintf(' :\n');
+                            tstr=cellstr(DATA.clusternames{nbtemp}.txt);
+                            for n=1:numel(tstr),str{end+1}=sprintf('%s\n',tstr{n});end
                         end
-                        fprintf(fh,'\nAll clusters combined :\n');
-                        str=cellstr(DATA.clusternames{end}.txt);
-                        for n=1:numel(str),fprintf(fh,'%s\n',str{n});end
-                        fclose(fh);
+                        str{end+1}=sprintf('\nAll clusters combined :\n');
+                        tstr=cellstr(DATA.clusternames{end}.txt);
+                        for n=1:numel(tstr),str{end+1}=sprintf('%s\n',tstr{n});end
+                        %fclose(fh);
+                        conn_fileutils('fileappend_raw',fullfile(filepath,[filename_name,'.Table.txt']),str);
                     end
 
 %                     [peaks,peaks_idx]=conn_peaks({tempT,mat{1}},12);
@@ -297,7 +304,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                     %fprintf('Peaks file saved as %s\n',fullfile(filepath,[filename_name,'.PEAKS.mat']));
                     %if ~isempty(C)
                     %    V=struct('mat',mat{1},'dim',size(C),'pinfo',[1;0;0],'dt',[spm_type('uint32') spm_platform('bigend')],'fname',fullfile(filepath,[filename_name,'.SEGs.img']),'descrip',descrip);
-                    %    V=spm_write_vol(V,C);
+                    %    V=conn_fileutils('spm_write_vol',V,C);
                     %    conn_disp('fprintf','Segmentation file saved as %s\n',V.fname);
                     %    fh=fopen(fullfile(filepath,[filename_name,'.SEGs.txt']),'wt');
                     %    for nbtemp=1:numel(peaks_idx),
@@ -310,7 +317,8 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 return;
                 
             case 'plot_design',
-                load(spmfile,'SPM');
+                hmsg=conn_msgbox('Initializing. Please wait...','',-1);
+                SPM=struct; conn_loadmatfile(spmfile,'SPM');
                 if isfield(SPM,'xX_multivariate')
                     if 0,%isfield(SPM.xX_multivariate,'Zcontr')
                         conn_displaydesign(SPM.xX_multivariate.X,SPM.xX_multivariate.Zfiles,SPM.xX_multivariate.C,SPM.xX_multivariate.Zcontr,SPM.xX_multivariate.Xnames,false);
@@ -320,6 +328,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 else
                     conn_displaydesign(SPM.xX.X,reshape({SPM.xY.VY.fname},size(SPM.xX.X,1),[]),SPM.xCon(1).c',1,SPM.xX.name,false);
                 end
+                if ishandle(hmsg), delete(hmsg); end
                 return;
                 
             case {'surface_view','surface_print','surface_gui_print','default_print'}
@@ -329,7 +338,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 filename=fullfile(fileparts(spmfile),'results.nii');
                 conn_vproject(GCF,[],'export_mask_selected',filename);
                 fh=conn_mesh_display(filename,'');
-                if ~isempty(regexp(OPTION,'print$')), fh('print',4,options{:}); fh('close'); end
+                if ~isempty(regexp(OPTION,'print$')), fh('background',[1 1 1]); fh('print',4,options{:}); fh('close'); end
                 %fh('zoomin');
                 return;
 
@@ -342,12 +351,14 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 if DATA.issurface, vfilename=conn_surf_surf2vol(filename); 
                 else vfilename=filename;
                 end
-                fh=conn_mesh_display(filename,vfilename);
+                fh=conn_mesh_display('',vfilename); % without surface projection
+                %fh=conn_mesh_display(filename,vfilename); % with surface projection as well
                 if DATA.issurface, fh('brain',1); fh('sub_transparency',0); 
                 else fh('sub_transparency',.5);
                 end
+                fh('brain_color',[1 1 1]);
                 fh('act_color',[1 0 0]); fh('colormap',[1 0 0]); 
-                if ~isempty(regexp(OPTION,'print$')), fh('print',7,options{:}); fh('close'); end
+                if ~isempty(regexp(OPTION,'print$')), fh('background',[1 1 1]); fh('print',7,options{:}); fh('close'); end
                 return;
 
             case {'glass_view','glass_print'}
@@ -369,6 +380,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                     fh('brain_transparency',0);
                     fh('sub_transparency',0);
                     fh('mask_transparency',.05);
+                    fh('mask_color',[1 1 1]);
                     %fh('material',[.1 1 1 .25 0]);
                     fh('axis','on');
                 else
@@ -378,13 +390,13 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                     fh('brain_color',.8*[1 1 1]);
                     fh('sub_color',.8*[1 1 1]);
                 end
-                if ~isempty(regexp(OPTION,'print$')), fh('print',3,options{:}); fh('close'); end
+                if ~isempty(regexp(OPTION,'print$')), fh('background',[1 1 1]); fh('print',3,options{:}); fh('close'); end
                 return;
                 
             case 'spm_view'
                 [spmfile_path,spmfile_name]=fileparts(spmfile);
-                cwd=pwd;cd(spmfile_path);
-                load(spmfile,'SPM');
+                cwd=pwd;conn_fileutils('cd',spmfile_path);
+                SPM=struct; conn_loadmatfile(spmfile,'SPM');
                 spm defaults fmri;
                 [hReg,xSPM,SPM] = spm_results_ui('setup',SPM);
                 assignin('base','hReg',hReg);
@@ -412,13 +424,14 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 fh('multisliceset',1,16,8);
                 fh('pointer_mm',[0 0 10]);
                 if ~isempty(regexp(OPTION,'print$')), 
+                    fh('background',[1 1 1]); 
                     fh('togglegui',1);
                     fh('print',options{:});
                     fh('close'); 
                 end
                 return
                 
-            case 'cluster_view'
+            case 'cluster_view_old'
                 filename=fullfile(fileparts(spmfile),'results.nii');
                 conn_vproject(GCF,[],'export_mask',filename);
                 filename=fullfile(fileparts(spmfile),'results.ROIs.nii');
@@ -426,7 +439,8 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 if isempty(tfilename), return; end
                 [tspmfile_path,tspmfile_name]=fileparts(tspmfile);
                 cwd=pwd;
-                cd(tspmfile_path);
+                conn_fileutils('cd',tspmfile_path);
+                
                 if tviewrex
                     conn_rex(tspmfile,tfilename,'output_type','saverex','level','clusters','select_clusters',0,'s',[],'gui',1);%,'mstats',false);
                 else
@@ -437,37 +451,68 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 cd(cwd);
                 return;
                 
-            case 'cluster_import',
+            case {'cluster_import','cluster_view'}
                 filename=fullfile(fileparts(spmfile),'results.nii');
                 conn_vproject(GCF,[],'export_mask',filename);
                 filename=fullfile(fileparts(spmfile),'results.ROIs.nii');
-                [tfilename,tspmfile]=conn_vproject_selectfiles(filename,spmfile,[]);
+                if strcmpi(OPTION,'cluster_view')&&~conn_server('util_isremotefile',filename), tviewrex=false; else tviewrex=[]; end
+                [tfilename,tspmfile]=conn_vproject_selectfiles(filename,spmfile,tviewrex);
                 if isempty(tfilename), return; end
                 [tspmfile_path,tspmfile_name]=fileparts(tspmfile);
                 cwd=pwd;
-                cd(tspmfile_path);
-                htfig=conn_msgbox('Loading connectivity values. Please wait','',-1);
-                [y,name,info]=conn_rex(tspmfile,tfilename,'level','clusters');
-                if ishandle(htfig), delete(htfig); end
-                name=regexprep(name,'^results\.ROIs\.?','cluster ');
-                %temp=load(tspmfile,'SPM');
-                if isfield(info.SPM.SPM.xX,'SelectedSubjects')&&~rem(size(y,1),nnz(info.SPM.SPM.xX.SelectedSubjects)) % fill-in with NaN for missing data
-                    ty=nan(size(y,1)/nnz(info.SPM.SPM.xX.SelectedSubjects)*numel(info.SPM.SPM.xX.SelectedSubjects),size(y,2));
-                    ty(repmat(logical(info.SPM.SPM.xX.SelectedSubjects),size(y,1)/nnz(info.SPM.SPM.xX.SelectedSubjects),1),:)=y;
-                    y=ty;
-                end
-                if (~isfield(info,'extractcontrasts')||~info.extractcontrasts)&&isfield(info.SPM.SPM,'xX_multivariate')&&isfield(info.SPM.SPM.xX_multivariate,'Zfiles')
-                    if ~rem(size(y,1),CONN_x.Setup.nsubjects)&&size(y,1)/CONN_x.Setup.nsubjects==numel(info.SPM.SPM.xX_multivariate.Znames)
-                        name=reshape(cellfun(@(a,b)sprintf('%s %s',a,b),repmat(name(:)',numel(info.SPM.SPM.xX_multivariate.Znames),1),repmat(info.SPM.SPM.xX_multivariate.Znames(:),1,numel(name)),'uni',0),1,[]);
-                        y=reshape(y,CONN_x.Setup.nsubjects,[],size(y,2));
-                    end
+                conn_fileutils('cd',tspmfile_path);
+                
+                if tviewrex
+                    conn_rex(tspmfile,tfilename,'output_type','saverex','level','clusters','select_clusters',0,'s',[],'gui',1);%,'mstats',false);
                 else
-                    if ~rem(size(y,1),CONN_x.Setup.nsubjects)&&size(y,1)/CONN_x.Setup.nsubjects==numel(info.SPM.SPM.xX_multivariate.Ynames)
-                        name=reshape(cellfun(@(a,b)sprintf('%s %s',a,b),repmat(name(:)',numel(info.SPM.SPM.xX_multivariate.Ynames),1),repmat(info.SPM.SPM.xX_multivariate.Ynames(:),1,numel(name)),'uni',0),1,[]);
-                        y=reshape(y,CONN_x.Setup.nsubjects,[],size(y,2));
+                    htfig=conn_msgbox('Loading connectivity values. Please wait','',-1);
+                    [y,name,info]=conn_rex(tspmfile,tfilename,'level','clusters');
+                    if ishandle(htfig), delete(htfig); end
+                    name=regexprep(name,'^results\.ROIs\.?','cluster ');
+                    if strcmpi(OPTION,'cluster_import')
+                        %temp=conn_loadmatfile(tspmfile,'SPM');
+                        if isfield(info.SPM.SPM.xX,'SelectedSubjects')&&~rem(size(y,1),nnz(info.SPM.SPM.xX.SelectedSubjects)) % fill-in with NaN for missing data
+                            ty=nan(size(y,1)/nnz(info.SPM.SPM.xX.SelectedSubjects)*numel(info.SPM.SPM.xX.SelectedSubjects),size(y,2));
+                            ty(repmat(logical(info.SPM.SPM.xX.SelectedSubjects),size(y,1)/nnz(info.SPM.SPM.xX.SelectedSubjects),1),:)=y;
+                            y=ty;
+                        end
+                        if (~isfield(info,'extractcontrasts')||~info.extractcontrasts)&&isfield(info.SPM.SPM,'xX_multivariate')&&isfield(info.SPM.SPM.xX_multivariate,'Zfiles')
+                            if ~rem(size(y,1),CONN_x.Setup.nsubjects)&&size(y,1)/CONN_x.Setup.nsubjects==numel(info.SPM.SPM.xX_multivariate.Znames)
+                                name=reshape(cellfun(@(a,b)sprintf('%s %s',a,b),repmat(name(:)',numel(info.SPM.SPM.xX_multivariate.Znames),1),repmat(info.SPM.SPM.xX_multivariate.Znames(:),1,numel(name)),'uni',0),1,[]);
+                                y=reshape(y,CONN_x.Setup.nsubjects,[],size(y,2));
+                            end
+                        else
+                            if ~rem(size(y,1),CONN_x.Setup.nsubjects)&&size(y,1)/CONN_x.Setup.nsubjects==numel(info.SPM.SPM.xX_multivariate.Ynames)
+                                name=reshape(cellfun(@(a,b)sprintf('%s %s',a,b),repmat(name(:)',numel(info.SPM.SPM.xX_multivariate.Ynames),1),repmat(info.SPM.SPM.xX_multivariate.Ynames(:),1,numel(name)),'uni',0),1,[]);
+                                y=reshape(y,CONN_x.Setup.nsubjects,[],size(y,2));
+                            end
+                        end
+                        conn_importl2covariate(name,num2cell(y,1));
+                    else
+                        s=1:length(info.ROInames);
+                        cname={};mcon=[]; if isfield(info,'mstats'), mstats=info.mstats; else mstats=true; end
+                        try, cname=info.SPM.SPM.xX_multivariate.Znames; mcon=info.SPM.SPM.xX_multivariate.Zcontr; end
+                        if isempty(cname), try, cname=info.SPM.SPM.xX_multivariate.Ynames; mcon=info.SPM.SPM.xX_multivariate.M; end; end
+                        if isfield(info.SPM.SPM,'xX_multivariate')&&isfield(info.SPM.SPM.xX_multivariate,'dof')
+                            c=info.SPM.SPM.xX_multivariate.C;
+                            xX=info.SPM.SPM.xX_multivariate;
+                            %if numel(mcon)<=1, mstats=false; end
+                        else
+                            if isfield(info,'ic')&&~isempty(info.ic), Ic=info.ic;
+                            elseif isfield(info,'gui')&&~info.gui&&isfield(info.SPM.SPM,'xCon')&&numel(info.SPM.SPM.xCon)==1, Ic=1;
+                            else [Ic,info.SPM.SPM.xCon] = spm_conman(info.SPM.SPM,'T|F',inf,'Select contrast','',1);
+                            end
+                            c=[info.SPM.SPM.xCon(Ic).c];
+                            if isempty(cname), cname={info.SPM.SPM.xCon(Ic).name}; end
+                            xX=info.SPM.SPM.xX;
+                            mcon=1;
+                            %mstats=false;
+                        end
+                        if ~isfield(info,'ROIinfo'), info.ROIinfo=[]; end
+                        if ~isfield(info,'gui'), info.gui=true; end
+                        conn_rex('test',xX,info.ROIdata(:,s),c,cname,{info.ROInames{s}},s,info.ROIinfo,mstats,mcon,info.SPM.SPM,true);
                     end
                 end
-                conn_importl2covariate(name,num2cell(y,1));
                 cd(cwd);
                 return;
                 
@@ -485,7 +530,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 dataplot=conn_displaysubject(spmfile);
 %                 [spmfile_path,spmfile_name]=fileparts(spmfile);
 %                 cwd=pwd;cd(spmfile_path);
-%                 load(spmfile,'SPM');
+%                 conn_loadmatfile(spmfile,'SPM');
 %                 idxsubjects=1:size(SPM.xX.X,1);
 %                 if isfield(SPM.xX,'SelectedSubjects'), consubjects=find(SPM.xX.SelectedSubjects); consubjects=consubjects(1+rem(idxsubjects-1,numel(consubjects))); 
 %                 else consubjects=idxsubjects;
@@ -587,7 +632,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 return;
                 
             case 'openfolder'
-                cd(fileparts(spmfile));
+                conn_fileutils('cd',fileparts(spmfile));
                 try
                     if ispc, [nill,nill]=system(sprintf('start "%s"',fileparts(spmfile)));
                     else [nill,nill]=system(sprintf('open ''%s''',fileparts(spmfile)));
@@ -639,11 +684,11 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 end
                 peaks_suprathreshold=b(peaks_idx+size(b,1)*size(b,2)*size(b,3))>0;
                 [spmfile_path,spmfile_name]=fileparts(spmfile);
-                save(fullfile(spmfile_path,'PEAKS.mat'),'peaks','peaks_suprathreshold');
+                conn_savematfile(fullfile(spmfile_path,'PEAKS.mat'),'peaks','peaks_suprathreshold');
                 conn_process('extract_connectome',peaks(peaks_suprathreshold,:),[peaks(peaks_suprathreshold,:);peaks(~peaks_suprathreshold,:)],-1);
                 return
 %                 ROI=conn_process('results_connectome',spmfile_path,-1);
-%                 save(fullfile(spmfile_path,'ROI.mat'),'ROI');
+%                 conn_savematfile(fullfile(spmfile_path,'ROI.mat'),'ROI');
 %                 conn_displayroi('initfile','results_roi',0,fullfile(spmfile_path,'ROI.mat'));
                 %conn_displayroi('initfile','results_connectome',0,spmfile_path,peaks_suprathreshold,fullfile(spmfile_path,'ROI.mat'));
                 %conn_displayroi('init','results_connectome',0,spmfile_path,peaks_suprathreshold);
@@ -682,11 +727,11 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                 end
                 THR=DATA.thres{1};
                 SIDE=DATA.side;
-                if conn_vproject_randomise(spmfile,THR_TYPE,THR,~skipgui);
+                if conn_vproject_randomise(spmfile,THR_TYPE,THR,~skipgui,CONN_gui.isremote);
                     try, 
-                        SIM=load(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); 
+                        SIM=conn_loadmatfile(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); 
                         if ~isfield(SIM,'VERSION'), SIM.VERSION=0; end
-                        if SIM.VERSION<2, SIM=[]; spm_unlink(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
+                        if SIM.VERSION<2, SIM=[]; conn_fileutils('spm_unlink',conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
                     end
                 end
                 init=-1;
@@ -737,11 +782,36 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                         DATA.selectcluster=[];
                     end
                 end
+            case 'advancedthr'
+                if isempty(OPTION2), advanced=get(DATA.handles(38),'value');
+                else advanced=OPTION2; set(DATA.handles(38),'value',advanced);
+                end
+                if advanced
+                    conn_vproject(GCF,[],'fwec.option',4,'immediatereturn');
+%                     icp=[1 2 3 4 5 6  11 15];
+%                     set(DATA.handles(icp),'visible','on');
+%                     if thres{2}==3||thres{2}==4, set(DATA.handles([4 5 6  15]),'visible','off'); end
+%                     set(DATA.handles(33),'visible','off','string','');
+                    return
+                else
+                    ok=false;for method=1:numel(DATA.thres_defaults), if isequal(DATA.thres,DATA.thres_defaults{method}(1:4))&&DATA.side==3, ok=true; break; end; end; 
+                    if ~ok, 
+                        conn_vproject(GCF,[],'fwec.option',4,'immediatereturn');
+%                         set(DATA.handles(38),'value',true);
+                    else
+                        conn_vproject(GCF,[],'fwec.option',method);%,'immediatereturn');
+%                         icp=[1 2 3 4 5 6  11 15]; 
+%                         set(DATA.handles(icp),'visible','off');
+%                         set(DATA.handles(33),'visible','on');
+                    end
+                    return
+                end
+                
             case 'fwec.option'
                 if isempty(OPTION2), method=get(DATA.handles(32),'value');
                 else method=OPTION2; set(DATA.handles(32),'value',method);
                 end
-                advanced=false; %get(DATA.handles(38),'value');
+                advanced=get(DATA.handles(38),'value');
                 if method==1&&~DATA.paramoptions(1)&&DATA.issurface, conn_msgbox('Sorry, Random Field Theory parametric statistics not available in surface-based analyses','Option not available',2); set(DATA.handles(32),'value',4); return; 
                 elseif method==1&&~DATA.paramoptions(1), conn_msgbox('Parametric analysis option not available. Please re-run second-level analyses','Incomplete analysis files',2); set(DATA.handles(32),'value',4); return; 
                 elseif (method==2||method==3)&&~DATA.paramoptions(2), conn_msgbox('Non-parametric analysis option not available. Please re-run second-level analyses','Incomplete analysis files',2); set(DATA.handles(32),'value',4); return; 
@@ -801,6 +871,7 @@ if numel(param)==1 && ishandle(param), % callbacks from UI objects
                         DATA.side=side;
                         DATA.thres=thres;
                         set(GCF,'userdata',DATA);
+                        if isequal(OPTION3, 'immediatereturn'), return; end
                         init=-1;
                         doredraw=true;
                         DATA.selectcluster=[];                        
@@ -917,9 +988,7 @@ else, %initialization
     end
 end
 
-%backgroundcolor=[.975 .975 .975];
-%backgroundcolor=[0.12 0.126 0.132];
-if 0, backgroundcolor=[.975 .975 .975];
+if 1, backgroundcolor=[.975 .975 .975];
 elseif isfield(CONN_gui,'backgroundcolor'), backgroundcolor=CONN_gui.backgroundcolor;
 else backgroundcolor=[0.12 0.126 0.132];
 end
@@ -944,51 +1013,55 @@ if init>0, % initialize
                 uicontrol('style','frame','units','norm','position',[.0,.87,1,.13],'backgroundcolor',color3,'foregroundcolor',color3);
                 %uicontrol('style','frame','units','norm','position',[.54,.42,.41,.42],'backgroundcolor',backgroundcolor2,'foregroundcolor',.85*[1,1,1]);
                 %uicontrol('style','frame','units','norm','position',[.49,.39,.11,.41],'backgroundcolor',.9*[1,1,1],'foregroundcolor',.5*[1 1 1]);
+                %dp=@(a,b)[.615+(a-1)*.065,.465+(b-1)*.055,.06,.05];
+                dp1=@(a,b)[.68+(a-1)*.06,.55+(b-1)*.04,.05,.035];
+                dp2=@(a,b)[.80+(a-1)*.15,.55+(b-1)*.04,.15,.04];
                 set(GCF,'color',backgroundcolor);
                 DATA.handles=[...
-                    uicontrol('style','text','units','norm','position',[.05,.925,.15,.03],'string','voxel threshold: p <','fontname','arial','fontsize',8+CONN_gui.font_offset,'fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','edit','units','norm','position',[.20,.925,.10,.03],'string',num2str(thres{1}),'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel'},'tooltipstring','Voxel-level threshold value: False-positive threshold value for individual voxels (based on T/F/X statistics)','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','popupmenu','units','norm','position',[.325,.925,.25,.03],'string',{'p-uncorrected','p-FDR corrected','p-FDR corrected (TFCE)','p-FWE corrected (TFCE)','F/T/X stat'},'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel'},'value',thres{2},'tooltipstring','False-positive control type for individual voxels','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','text','units','norm','position',[.05,.885,.15,.03],'string','cluster threshold: p <','fontname','arial','fontsize',8+CONN_gui.font_offset,'fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','edit','units','norm','position',[.20,.885,.10,.03],'string',num2str(thres{3}),'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel'},'tooltipstring','Cluster-level threshold value: False-positive threshold value for individual clusters (based on cluster size/mass/peak)','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','popupmenu','units','norm','position',[.325,.885,.25,.03],'string',{'cluster-size','cluster-size p-FWE corrected','cluster-size p-FDR corrected','cluster-size p-uncorrected','peak-voxel p-FWE corrected','peak-voxel p-FDR corrected','peak-voxel p-uncorrected','cluster-mass','cluster-mass p-FWE corrected','cluster-mass p-FDR corrected','cluster-mass p-uncorrected'},'fontname','arial','fontsize',7+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel'},'value',thres{4},'tooltipstring','False-positive control type for individual clusters','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','text','units','norm','position',[.05,.30,.9,.03],'string',sprintf('%15s%13s%13s%13s%13s%13s%13s%15s','Cluster (x,y,z)','size','size p-FWE','size p-FDR','size p-unc','peak p-FWE','peak p-FDR','peak p-unc'),'fontname','arial','fontsize',8+CONN_gui.font_offset,'backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','left','fontname','monospaced','fontsize',7+CONN_gui.font_offset),...
-                    uicontrol('style','listbox','units','norm','position',[.05,.15,.9,.15],'string','','max',2,'value',[],'backgroundcolor',backgroundcolor,'foregroundcolor',round(foregroundcolor),'horizontalalignment','left','fontname','monospaced','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'selectroi'}),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.74,.06,.05],'string','Surface display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'surface_view'},'tooltipstring','<HTML><b>Surface display</b><br/>Displays selected results projected to cortical surface</HTML>'),...
-                    uicontrol('style','text','units','norm','position',[.03,.80,.27,.04],'string','Voxels in selected-cluster','fontname','arial','fontsize',9+CONN_gui.font_offset,'backgroundcolor',backgroundcolor,'foregroundcolor',.75*[1 1 1],'horizontalalignment','left','max',2,'visible','off','value',[]),...
-                    uicontrol('style','popupmenu','units','norm','position',[.605,.925,.2,.03],'string',{'positive contrast (one-sided)','negative contrast (one-sided)','two-sided'},'value',side,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel.side'},'tooltipstring','Analysis results directionality','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','edit','units','norm','position',[.05,.07,.9,.08],'string','','fontname','arial','fontsize',9+CONN_gui.font_offset,'visible','off','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','left','max',2,'value',[]),...
-                    uicontrol('style','text','units','norm','position',[.855,.910,.1,.04],'string','','fontname','arial','fontsize',8+CONN_gui.font_offset,'horizontalalignment','right','foregroundcolor',.5*[1 1 1],'backgroundcolor',color3),...
-                    uicontrol('style','text','units','norm','position',[.855,.870,.1,.04],'string','','fontname','arial','fontsize',8+CONN_gui.font_offset,'horizontalalignment','right','foregroundcolor',.5*[1 1 1],'backgroundcolor',color3),...
-                    uicontrol('style','popupmenu','units','norm','position',[.605,.885,.2,.03],'string',{'parametric stats','non-parametric stats'},'value',parametric,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel.parametric'},'tooltipstring','Cluster-level statistics based on parametric analyses (Random Field Theory) or non-parametric analyses (permutation/randomization tests)','foregroundcolor',1-color3,'backgroundcolor',color3),...
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.52,.06,.05],'string','Plot effects','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'cluster_view'},'tooltipstring','<HTML><b>Plot effects</b><br/>Explores/displays average effect sizes within each significant cluster</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.79,.71,.15,.04],'string','Export mask','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'export_mask'},'tooltipstring','Exports mask of supra-threshold voxels'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.79,.75,.15,.04],'string','Import values','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'cluster_import'},'tooltipstring','Imports average connectivity measure values within each significant cluster and for each subject into CONN toolbox as second-level covariates'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.79,.55,.15,.04],'string','Bookmark','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'bookmark'},'tooltipstring','Bookmark this second-level results explorer view'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.685,.06,.05],'string','Volume display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'volume_view'},'tooltipstring','<HTML><b>Volume display</b><br/>Displays selected results on 3d brain</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.52,.06,.05],'string','SPM display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'spm_view'},'tooltipstring','<HTML><b>SPM display</b><br/>Displays results in SPM</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.575,.06,.05],'string','Glass display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'glass_view'},'tooltipstring','<HTML><b>Glass display</b><br/>Displays selected results on 3d glass-brain</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.63,.06,.05],'string','Slice display','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'slice_view'},'tooltipstring','<HTML><b>Slice display</b><br/>Displays selected results on individual slices</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.79,.67,.15,.04],'string','non-parametric stats','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'computeparametric'},'tooltipstring','<HTML>Compute additional permutation/randomization simulations<br/>(only applicable when ''non-parametric stats'' is selected in the cluster-level threshold options above)</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.615,.465,.06,.05],'string','Plot subjects','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'subjects_view'},'tooltipstring','<HTML><b>Plot subjects</b><br/>Explores/displays individual-subject maps</HTML>'),...
-                    uicontrol('style','text','units','norm','position',[.58,.80,.2,.025],'string','Display&Print','backgroundcolor',backgroundcolor2,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset),...
-                    uicontrol('style','text','units','norm','position',[.79,.80,.15,.025],'string','Tools','backgroundcolor',backgroundcolor2,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset),...
-                    uicontrol('style','text','units','norm','position',[.075,.80,.4,.025],'string','Results','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset),...
-                    uicontrol('style','text','units','norm','position',[.79,.59,.15,.04],'string','','backgroundcolor',backgroundcolor2,'foregroundcolor',.5*[1 1 1],'horizontalalignment','center','fontname','arial','fontsize',7+CONN_gui.font_offset), ... 
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.465,.06,.05],'string','Plot design','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'plot_design'},'tooltipstring','<HTML><b>Plot design</b><br/>Displays General Linear Model design matrix and additional details</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.79,.51,.15,.04],'string','Open folder','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'openfolder'},'tooltipstring','Open folder containing current second-level results files'), ...
-                    uicontrol('style','popupmenu','units','norm','position',[.20,.965,.605,.03],'string',{'standard settings for cluster-based inferences #1: Random Field Theory parametric statistics','standard settings for cluster-based inferences #2: Permutation/randomization analysis','standard settings for cluster-based inferences #3: Threshold Free Cluster Enhancement','<HTML><i>show details (advanced Family-Wise Error control settings)</i></HTML>'},'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.option'},'value',1,'tooltipstring','Select false-positive control method','backgroundcolor',.9*[1,1,1]),...
-                    uicontrol('style','text','units','norm','position',[.20,.88,.605,.07],'string','','horizontalalignment','center','backgroundcolor',color3,'foregroundcolor',.5*[1 1 1],'horizontalalignment','center','fontname','arial','fontsize',7+CONN_gui.font_offset), ... 
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.74,.06,.05],'string','Surface print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'surface_print'},'tooltipstring','<HTML><b>Surface print</b><br/>Prints current results projected to cortical surface</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.685,.06,.05],'string','Volume print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'volume_print'},'tooltipstring','<HTML><b>Volume print</b><br/>Prints current results on 3d brain</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.63,.06,.05],'string','Slice print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'slice_print'},'tooltipstring','<HTML><b>Slice print</b><br/>Prints current results on individual slices</HTML>'),...
-                    uicontrol('style','pushbutton','units','norm','position',[.68,.575,.06,.05],'string','Glass print','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'glass_print'},'tooltipstring','<HTML><b>Glass print</b><br/>Prints current results on 3d glass-brain</HTML>') ];
-                    %uicontrol('style','checkbox','units','norm','position',[.9,.965,.1,.03],'string','Advanced','value',0,'fontsize',8+CONN_gui.font_offset,'horizontalalignment','left','backgroundcolor',.9*[1,1,1],'callback',{@conn_vproject,'advancedthr'},'tooltipstring','Displays advanced thresholding options')]; 
+                    uicontrol('style','text','units','norm','position',[.05,.925,.15,.03],'string','voxel threshold: p <','fontname','arial','fontsize',8+CONN_gui.font_offset,'fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','edit','units','norm','position',[.20,.925,.10,.03],'string',num2str(thres{1}),'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel'},'tooltipstring','Voxel-level threshold value: False-positive threshold value for individual voxels (based on T/F/X statistics)','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','popupmenu','units','norm','position',[.325,.925,.25,.03],'string',{'p-uncorrected','p-FDR corrected','p-FDR corrected (TFCE)','p-FWE corrected (TFCE)','F/T/X stat'},'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel'},'value',thres{2},'tooltipstring','False-positive control type for individual voxels','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.05,.885,.15,.03],'string','cluster threshold: p <','fontname','arial','fontsize',8+CONN_gui.font_offset,'fontweight','bold','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','edit','units','norm','position',[.20,.885,.10,.03],'string',num2str(thres{3}),'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel'},'tooltipstring','Cluster-level threshold value: False-positive threshold value for individual clusters (based on cluster size/mass/peak)','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','popupmenu','units','norm','position',[.325,.885,.25,.03],'string',{'cluster-size','cluster-size p-FWE corrected','cluster-size p-FDR corrected','cluster-size p-uncorrected','peak-voxel p-FWE corrected','peak-voxel p-FDR corrected','peak-voxel p-uncorrected','cluster-mass','cluster-mass p-FWE corrected','cluster-mass p-FDR corrected','cluster-mass p-uncorrected'},'fontname','arial','fontsize',7+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel'},'value',thres{4},'tooltipstring','False-positive control type for individual clusters','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.05,.30,.9,.03],'string',sprintf('%15s%13s%13s%13s%13s%13s%13s%15s','Cluster (x,y,z)','size','size p-FWE','size p-FDR','size p-unc','peak p-FWE','peak p-FDR','peak p-unc'),'fontname','arial','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','left','fontname','monospaced','fontsize',7+CONN_gui.font_offset,'parent',GCF),...
+                    uicontrol('style','listbox','units','norm','position',[.05,.15,.9,.15],'string','','tag','highlight','max',2,'value',[],'backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','left','fontname','monospaced','fontsize',7+CONN_gui.font_offset,'callback',{@conn_vproject,'selectroi'},'parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,6),'string','Surface display','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'surface_view'},'tooltipstring','<HTML><b>Surface display</b><br/>Displays selected results projected to cortical surface</HTML>','parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.03,.80,.27,.04],'string','Voxels in selected-cluster','fontname','arial','fontsize',9+CONN_gui.font_offset,'backgroundcolor',backgroundcolor,'foregroundcolor',.75*[1 1 1],'horizontalalignment','left','max',2,'visible','off','value',[],'parent',GCF),...
+                    uicontrol('style','popupmenu','units','norm','position',[.605,.925,.2,.03],'string',{'positive contrast (one-sided)','negative contrast (one-sided)','two-sided'},'value',side,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.voxellevel.side'},'tooltipstring','Analysis results directionality','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','edit','units','norm','position',[.05,.07,.9,.08],'string','','fontname','arial','fontsize',9+CONN_gui.font_offset,'visible','off','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','left','max',2,'value',[],'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.855,.930,.1,.03],'string','','fontname','arial','fontsize',8+CONN_gui.font_offset,'horizontalalignment','right','foregroundcolor',.5*[1 1 1],'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.855,.900,.1,.03],'string','','fontname','arial','fontsize',8+CONN_gui.font_offset,'horizontalalignment','right','foregroundcolor',.5*[1 1 1],'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','popupmenu','units','norm','position',[.605,.885,.2,.03],'string',{'parametric stats','non-parametric stats'},'value',parametric,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel.parametric'},'tooltipstring','Cluster-level statistics based on parametric analyses (Random Field Theory) or non-parametric analyses (permutation/randomization tests)','foregroundcolor',1-color3,'backgroundcolor',color3,'parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,2),'string','Plot effects','tag','highlight','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'cluster_view'},'tooltipstring','<HTML><b>Plot effects</b><br/>Explores/displays average effect sizes within each significant cluster</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp2(1,5),'string','Export mask','tag','highlight','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'export_mask'},'tooltipstring','Exports mask of supra-threshold voxels','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp2(1,6),'string','Import values','tag','highlight','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'cluster_import'},'tooltipstring','Imports average connectivity measure values within each significant cluster and for each subject into CONN toolbox as second-level covariates','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp2(1,2),'string','Bookmark','tag','highlight','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'bookmark'},'tooltipstring','Bookmark this second-level results explorer view','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,5),'string','Volume display','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'volume_view'},'tooltipstring','<HTML><b>Volume display</b><br/>Displays selected results on 3d brain</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,2),'string','SPM display','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'spm_view'},'tooltipstring','<HTML><b>SPM display</b><br/>Displays results in SPM</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,3),'string','Glass display','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'glass_view'},'tooltipstring','<HTML><b>Glass display</b><br/>Displays selected results on 3d glass-brain</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,4),'string','Slice display','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'slice_view'},'tooltipstring','<HTML><b>Slice display</b><br/>Displays selected results on individual slices</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp2(1,4),'string','non-parametric stats','tag','highlight','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'computeparametric'},'tooltipstring','<HTML>Compute additional permutation/randomization simulations<br/>(only applicable when ''non-parametric stats'' is selected in the cluster-level threshold options above)</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(1,1),'string','Plot subjects','tag','highlight','fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'subjects_view'},'tooltipstring','<HTML><b>Plot subjects</b><br/>Explores/displays individual-subject maps</HTML>','parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.68,.80,.12,.025],'string','Display&Print','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.80,.80,.15,.025],'string','Tools','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.075,.80,.4,.025],'string','Results','backgroundcolor',backgroundcolor,'foregroundcolor',foregroundcolor,'horizontalalignment','center','fontweight','bold','fontname','arial','fontsize',9+CONN_gui.font_offset,'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',dp2(1,3),'string','','backgroundcolor',backgroundcolor2,'foregroundcolor',.5*[1 1 1],'horizontalalignment','center','fontname','arial','fontsize',7+CONN_gui.font_offset), ... 
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,1),'string','Plot design','tag','highlight','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'plot_design'},'tooltipstring','<HTML><b>Plot design</b><br/>Displays General Linear Model design matrix and additional details</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp2(1,1),'string','Open folder','tag','highlight','foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'openfolder'},'tooltipstring','Open folder containing current second-level results files','parent',GCF), ...
+                    uicontrol('style','popupmenu','units','norm','position',[.20,.965,.605,.03],'string',{'standard settings for cluster-based inferences #1: Random Field Theory parametric statistics','standard settings for cluster-based inferences #2: Permutation/randomization analysis','standard settings for cluster-based inferences #3: Threshold Free Cluster Enhancement','<HTML><i>user-defined (advanced Family-Wise Error control settings)</i></HTML>'},'tag','highlight','foregroundcolor',foregroundcolor,'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.option'},'value',1,'tooltipstring','Select false-positive control method','backgroundcolor',.9*[1,1,1],'parent',GCF),...
+                    uicontrol('style','text','units','norm','position',[.10,.88,.75,.07],'string','','horizontalalignment','center','backgroundcolor',color3,'foregroundcolor',.5*[1 1 1],'horizontalalignment','center','fontname','arial','fontsize',7+CONN_gui.font_offset,'parent',GCF), ... 
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,6),'string','Surface print','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'surface_print'},'tooltipstring','<HTML><b>Surface print</b><br/>Prints current results projected to cortical surface</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,5),'string','Volume print','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'volume_print'},'tooltipstring','<HTML><b>Volume print</b><br/>Prints current results on 3d brain</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,4),'string','Slice print','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'slice_print'},'tooltipstring','<HTML><b>Slice print</b><br/>Prints current results on individual slices</HTML>','parent',GCF),...
+                    uicontrol('style','pushbutton','units','norm','position',dp1(2,3),'string','Glass print','tag','highlight','fontname','arial','fontweight','bold','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'glass_print'},'tooltipstring','<HTML><b>Glass print</b><br/>Prints current results on 3d glass-brain</HTML>','parent',GCF), ...
+                    uicontrol('style','checkbox','units','norm','position',[.88,.870,.12,.03],'string','show details','tag','highlight','value',0,'fontsize',8+CONN_gui.font_offset,'horizontalalignment','right','foregroundcolor',foregroundcolor,'backgroundcolor',.9*[1,1,1],'callback',{@conn_vproject,'advancedthr'},'tooltipstring','Displays advanced thresholding options','parent',GCF), ...
+                    uicontrol('style','pushbutton','units','norm','position',[.81,.965,.02,.03],'fontsize',7+CONN_gui.font_offset,'foregroundcolor',foregroundcolor,'backgroundcolor',backgroundcolor2,'string','?','tag','highlight','tooltipstring','<HTML>Documentation about available methods of statistical inference</HTML>','interruptible','off','callback',@(varargin)conn('gui_help','url','http://www.conn-toolbox.org/fmri-methods/cluster-level-inferences'),'parent',GCF) ]; 
                     %uicontrol('style','text','units','norm','position',[.4,.30,.1,.025],'string','voxel p-cor','backgroundcolor','k','foregroundcolor','y','horizontalalignment','left'),...
                     %uicontrol('style','listbox','units','norm','position',[.2,.05,.1,.25],'string','','backgroundcolor','k','foregroundcolor','w','horizontalalignment','left'),...
                     %uicontrol('style','listbox','units','norm','position',[.3,.05,.1,.25],'string','','backgroundcolor','k','foregroundcolor','w','horizontalalignment','left'),...
                     %uicontrol('style','listbox','units','norm','position',[.4,.05,.1,.25],'string','','backgroundcolor','k','foregroundcolor','w','horizontalalignment','left')];
-                uiwrap(DATA.handles([8,12,   17,18,19,24,31]));
+                uiwrap(DATA.handles([8,12,17,18,19,24,31,39]));
                 if DATA.mat{6}~='T', set(DATA.handles(11),'value',3,'enable','off'); end; 
                 bp=[9 20 22 23 21 16 25 30 34 35 37 36]; 
                 bp_isprint=[0 0 0 0 0 0 0 0 1 1 1 1]; 
@@ -999,7 +1072,7 @@ if init>0, % initialize
                     maxtemp=1;%mode(round(temp(:)*100))/100;
                     if maxtemp<.5, temp=1-temp; maxtemp=1-maxtemp; end
                     temp=max(0,min(1, .75*temp+.25*temp/maxtemp.*repmat(shiftdim(backgroundcolor,-1),[size(temp,1),size(temp,2),1,size(temp,4)]) ));
-                    temp=temp(round(1:ft:size(temp,1)),round(1:ft:size(temp,2)),:);
+                    temp=min(.95,temp(round(1:ft:size(temp,1)),round(1:ft:size(temp,2)),:));
                     if bp_isprint(n1)
                         if ismember(n1,[3,11]), tempprintmask=printmask(ceil(size(printmask,1)/4)+(1:ceil(size(printmask,1)/2)),ceil(size(printmask,2)/4)+(1:ceil(size(printmask,2)/2))); else tempprintmask=printmask; end
                         temp=.75*mean(backgroundcolor2)+.25*temp;
@@ -1057,9 +1130,9 @@ if init>0, % initialize
                 %    delete(DATA.handles(6)); DATA.handles(6)=uicontrol('style','popupmenu','units','norm','position',[.625,.895,.1,.03],'string',{'peak p-FDR corrected','extent k-value'},'fontname','arial','fontsize',8+CONN_gui.font_offset,'callback',{@conn_vproject,'fwec.clusterlevel'},'value',min(2,thres{4}));
                 %end
                 %if isempty(DATA.mat{2}), set(DATA.handles(6),'visible','off','value',4); DATA.thres{4}=4; DATA.thres{3}=10; thres=DATA.thres; set(DATA.handles(5),'string',num2str(thres{3})); set(DATA.handles(4),'string','extent threshold: cluster k ='); end
-                DATA.axes=subplot(222);set(DATA.axes,'units','norm','position',[.40,.45,.2,.38],'visible','off');%[.55,.35,.4,.6],'visible','off');
+                DATA.axes=axes('units','norm','position',[.10,.46,.35,.33],'visible','off','tag','highlight_pointer');%[.55,.35,.4,.6],'visible','off');
                 h0=get(0,'screensize');
-                set(GCF,'name',['results explorer ',DATA.spmfile],'numbertitle','off','color',backgroundcolor,'units','pixels','position',[h0(3)-.75*h0(3)+2,h0(4)-.9*h0(4)-48,.75*h0(3)-2,.9*h0(4)],'interruptible','off','busyaction','cancel','colormap',map,'tag','conn_vproject','userdata',DATA); %,'windowbuttondownfcn',{@conn_vproject,'buttondown'},'windowbuttonupfcn',{@conn_vproject,'buttonup'},'windowbuttonmotionfcn',[],'keypressfcn',{@conn_vproject,'keypress'},'colormap',map,'userdata',DATA); 
+                set(GCF,'name',['results explorer ',DATA.spmfile],'numbertitle','off','color',backgroundcolor,'units','pixels','position',[h0(3)-.75*h0(3)+2,h0(4)-.9*h0(4)-48,.75*h0(3)-2,.9*h0(4)],'interruptible','off','busyaction','cancel','colormap',map,'tag','conn_vproject','userdata',DATA,'windowbuttonmotionfcn',@uimotionfcn); %,'windowbuttondownfcn',{@conn_vproject,'buttondown'},'windowbuttonupfcn',{@conn_vproject,'buttonup'},'windowbuttonmotionfcn',[],'keypressfcn',{@conn_vproject,'keypress'},'colormap',map,'userdata',DATA); 
                 figure(GCF);
             end
         case '3d',
@@ -1129,8 +1202,8 @@ if strcmp(views,'full'),
             end
             if isfield(DATA,'selectcluster'), selectcluster=DATA.selectcluster;else, selectcluster=get(DATA.handles(8),'value'); end
             %if isempty(selectcluster), selectcluster=length(clusters)+1; end
-            if selectcluster<=length(clusters), select=clusters{selectcluster}; clusternames=clusternames{selectcluster}.txt; titleclusternames='Voxels in selected cluster:';
-            elseif (isempty(selectcluster)||selectcluster==length(clusters)+1)&&~isempty(clusternames), select=[]; clusternames=clusternames{length(clusters)+1}.txt; titleclusternames='All suprathreshold voxels:';
+            if selectcluster<=length(clusters), select=clusters{selectcluster}; clusternames=clusternames{selectcluster}.txt; titleclusternames=sprintf('Selected cluster %d/%d',selectcluster,length(clusters));
+            elseif (isempty(selectcluster)||selectcluster==length(clusters)+1)&&~isempty(clusternames), select=[]; clusternames=clusternames{length(clusters)+1}.txt; titleclusternames=''; %'All suprathreshold voxels:';
             else, select=[]; clusternames=[]; titleclusternames=''; end
         end
         %M={[-1,0,0;0,0,-1;0,-1,0],[0,-1,0;0,0,-1;-1,0,0],[-1,0,0;0,1,0;0,0,1]};
@@ -1146,7 +1219,7 @@ if strcmp(views,'full'),
         tplot=cat(1,cat(2,tplot{1},tplot{2}),cat(2,tplot{3},tplot{1}(1)*ones([size(tplot{3},1),size(tplot{2},2),size(tplot{2},3)])));
         cplot=cat(1,cat(2,cplot{1},cplot{2}),cat(2,cplot{3},cplot{1}(1)*ones([size(cplot{3},1),size(cplot{2},2),size(cplot{2},3)])));
         
-        if ~isempty(b), h=subplot(3,4,1,'parent',GCF); set(h,'units','norm','position',[.10,.46,.35,.33]); % DATA.axes
+        if ~isempty(b), h=DATA.axes; cla(h); %h=subplot(3,4,1,'parent',GCF); set(h,'units','norm','position',[.10,.46,.35,.33] ); % DATA.axes
         else, h=subplot(3,4,1,'parent',GCF); set(h,'units','norm','position',[.05,.1,.4,.8]);
         end
         %pres=.5;image(1:pres:size(tplot,2),1:pres:size(tplot,1),round(max((ceil(tplot(1:pres:end,1:pres:end)/64)-1)*64+1,convn(convn(tplot(1:pres:end,1:pres:end),conn_hanning(7)/4,'same'),conn_hanning(7)'/4,'same'))));axis equal; axis off;
@@ -1167,7 +1240,8 @@ if strcmp(views,'full'),
         end
         %backmask=find(all(temp==1,3));for n=1:3,temp(backmask+(n-1)*size(temp,1)*size(temp,2))=backgroundcolor(n); end
         hi=image(1:pres:size(tplot,2),1:pres:size(tplot,1),temp,'parent',h);axis(h,'equal','off');
-        set(hi,'buttondownfcn',@conn_vproject_imcallback);
+        hold(h,'on'); hf=text(.95*size(tplot,2),.95*size(tplot,1),titleclusternames,'color','k','horizontalalignment','right','fontsize',4+CONN_gui.font_offset,'parent',h); hold(h,'off');
+        set([hi,hf],'buttondownfcn',@conn_vproject_imcallback);
         %image(round(convn(convn(tplot(round(1:.5:end),round(1:.5:end),:),conn_hanning(3)/2,'same'),conn_hanning(3)'/2,'same')));axis equal; axis off;
         %image(tplot);axis equal; axis off;
         data1plot=DATA.stdprojections{4};
@@ -1216,7 +1290,7 @@ if strcmp(views,'full'),
         set(hcontrols(ishandle(hcontrols)),'enable','on');
         set(GCF,'pointer','arrow');%,'userdata',DATA);
     end
-    set(DATA.axes,'visible','off');
+    set(DATA.axes,'visible','off','tag','highlight_pointer');
     %subplot(122);conn_vproject(a,'none',projection,threshold,res,box); 
     %if ~isempty(b), DATA.axes=subplot(222); else, DATA.axes=subplot(122); end
 end
@@ -1394,7 +1468,7 @@ else,
         %dataplot2=convn(convn(dataplot2,conf2,'same'),conf2','same');
         k=.75;%.2;
         dataplotA=(dataplot2==0).*(k+(1-k)*dataplot1.^4) + (dataplot2>0).*(k+(1-k)*dataplot1.^4);
-        dataplotA(dataplot1==0)=.126; % 1 % background color
+        dataplotA(dataplot1==0)=1; %.126; % 1 % background color
         dataplotB=(dataplot2==0).*dataplotA + (dataplot2>0).*(dataplotA.*max(0,min(.8,.4+.4*tanh(5*(dataplot1-dataplot2)))));
         %dataplotB=(dataplot2==0).*dataplotA + (dataplot2>0).*(dataplotA.*max(0,min(.75,tanh(1.5*(1*dataplot1-dataplot2)))));
         %dataplotB=(dataplot2==0).*dataplotA + (dataplot2>0).*(.25*dataplotA.*(dataplot2<=.9*dataplot1));
@@ -1473,10 +1547,10 @@ if isempty(refsrois)||(isfield(refsrois,'filename')&&~isempty(refatlas)&&~isequa
         end
         %filename=fullfile(fileparts(which('conn')),'utils','otherrois','BA.img');
         [filename_path,filename_name,filename_ext]=fileparts(filename);
-        V=spm_vol(filename);
+        V=conn_fileutils('spm_vol',filename);
         [idxlabels,strlabels]=rex(filename,filename,'level','clusters','disregard_zeros',false); strlabels=regexprep(strlabels,['^',filename_name,'\.'],''); 
         %strlabels=textread(fullfile(filename_path,[filename_name,'.txt']),'%s','delimiter','\n');
-        tempdata=spm_read_vols(V); if numel(V)>1, [nill,tempdata]=max(tempdata,[],4); tempdata(~nill)=0; idxlabels=1:numel(strlabels); end
+        tempdata=conn_fileutils('spm_read_vols',V); if numel(V)>1, [nill,tempdata]=max(tempdata,[],4); tempdata(~nill)=0; idxlabels=1:numel(strlabels); end
         refsrois=struct('filename',filename,'filenameshort',filename_name,'V',V,'data',tempdata,'labels',{strlabels},'labelsidx',full(sparse(1,round(idxlabels(:)'),1:numel(idxlabels))));
     end
     if isempty(surfcoords)||conn_surf_dimscheck(refsrois.V)
@@ -1589,11 +1663,11 @@ switch(thres{2}),
             THR=0;%thres{1};
             SIDE=side;
             if isempty(SIM)||~any(SIM.Pthr==THR&SIM.Pthr_type==THR_TYPE&SIM.Pthr_side==SIDE)
-                if ~isempty(dir(conn_vproject_simfilename(spmfile,THR_TYPE,THR)))||conn_vproject_randomise(spmfile,THR_TYPE,THR,init~=1),
+                if conn_existfile(conn_vproject_simfilename(spmfile,THR_TYPE,THR))||conn_vproject_randomise(spmfile,THR_TYPE,THR,init~=1,CONN_gui.isremote),
                     try,
-                        SIM=load(conn_vproject_simfilename(spmfile,THR_TYPE,THR));
+                        SIM=conn_loadmatfile(conn_vproject_simfilename(spmfile,THR_TYPE,THR));
                         if ~isfield(SIM,'VERSION'), SIM.VERSION=0; end
-                        if SIM.VERSION<2, SIM=[]; spm_unlink(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
+                        if SIM.VERSION<2, SIM=[]; conn_fileutils('spm_unlink',conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
                     end
                 end
             end
@@ -1700,11 +1774,11 @@ if ~isempty(idxvoxels),
         THR=thres{1};
         SIDE=side;
         if isempty(SIM)||~any(SIM.Pthr==THR&SIM.Pthr_type==THR_TYPE&SIM.Pthr_side==SIDE)
-            if ~isempty(dir(conn_vproject_simfilename(spmfile,THR_TYPE,THR)))||((thres4~=1&&thres4~=8)&&conn_vproject_randomise(spmfile,THR_TYPE,THR,init~=1)),
+            if conn_existfile(conn_vproject_simfilename(spmfile,THR_TYPE,THR))||((thres4~=1&&thres4~=8)&&conn_vproject_randomise(spmfile,THR_TYPE,THR,init~=1,CONN_gui.isremote)),
                 try, 
-                    SIM=load(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); 
+                    SIM=conn_loadmatfile(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); 
                     if ~isfield(SIM,'VERSION'), SIM.VERSION=0; end
-                    if SIM.VERSION<2, SIM=[]; spm_unlink(conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
+                    if SIM.VERSION<2, SIM=[]; conn_fileutils('spm_unlink',conn_vproject_simfilename(spmfile,THR_TYPE,THR)); end % note: disregard older versions
                 end
             end
         end
@@ -2648,6 +2722,41 @@ for nh=1:numel(h)
 end
 end
 
+function uimotionfcn(option,varargin)
+h1=findobj(gcbf,'tag','highlight');
+h2=findobj(gcbf,'tag','highlight_pointer');
+if ~isempty(h1)||~isempty(h2)
+    p1=get(0,'pointerlocation');
+    p2=get(gcbf,'position');
+    p3=get(0,'screensize');
+    p2(1:2)=p2(1:2)+p3(1:2)-1; % note: fix issue when connecting to external monitor/projector
+    pos=(p1-p2(1:2))./p2(3:4);
+    c0=mean(get(gcbf,'color')<.5);
+    if ~isempty(h1)
+        active=get(h1,'position');
+        if iscell(active), active=cell2mat(active(:)); end
+        xpos=repmat(pos,[size(active,1),1]); 
+        %xpos1=active; xpos1=round(xpos1*500)/500;
+        %if size(xpos,1)>1, xpos1=num2cell(xpos1,2); end
+        md=find(min(min(xpos-active(:,1:2),active(:,1:2)+active(:,3:4)-xpos),[],2)>-.001)';
+        set(h1,'foregroundcolor',[.4 .4 .4]+.2*c0);%,{'position'},xpos1);
+        if ~isempty(md), 
+            %xpos1=active(md,:); xpos1=round(xpos1*500)/500+repmat([-.0002,-.0002,.0004,.0004],size(xpos1,1),1);
+            %if size(xpos,1)>1, xpos1=num2cell(xpos1,2); end
+            set(h1(md),'foregroundcolor',[.0 .0 .0]+1*c0);%,{'position'},xpos1); 
+        end
+    end
+    if ~isempty(h2)
+        active=get(h2,'position');
+        if iscell(active), active=cell2mat(active(:)); end
+        xpos=repmat(pos,[size(active,1),1]);
+        md=find(min(min(xpos-active(:,1:2),active(:,1:2)+active(:,3:4)-xpos),[],2)>-.001)';
+        if ~isempty(md), set(gcf,'Pointer','crosshair'); else set(gcf,'Pointer','arrow'); end
+    end
+end
+end
+
+
 function [filename_rois,filename_sources,viewrex]=conn_vproject_selectfiles(filename_rois,filename_sources,viewrex)
 global CONN_gui;
 if isempty(CONN_gui)||~isfield(CONN_gui,'font_offset'), CONN_gui.font_offset=0; end
@@ -2656,7 +2765,7 @@ filename_rois0=filename_rois;
 filename_sources0=filename_sources;
 thfig=dialog('units','norm','position',[.3,.4,.4,.25],'windowstyle','normal','name','REX interface','color','w','resize','on');
 uicontrol(thfig,'style','text','units','norm','position',[.1,.75,.8,.20],'string',{'Explore model effects and activation/connectivity values','within individual ROIs/clusters'},'backgroundcolor','w','fontsize',9+CONN_gui.font_offset,'fontweight','bold');
-ht1=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.55,.8,.15],'string',{'clusters of interest in current analysis','others clusters of interest or ROIs (select mask/ROI file)'},'fontsize',8+CONN_gui.font_offset,'horizontalalignment','left','callback',@conn_vproject_selectfiles_callback1,'tooltipstring','Define the clusters of interest');
+ht1=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.55,.8,.15],'string',{'clusters of interest in current analysis','others clusters of interest or ROIs (select exported mask/ROI file)'},'fontsize',8+CONN_gui.font_offset,'horizontalalignment','left','callback',@conn_vproject_selectfiles_callback1,'tooltipstring','Define the clusters of interest');
 ht2=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.40,.8,.15],'string',{'effect/activation/connectivity values in current analysis','other effect/activation/connectivity values (select second-level SPM.mat file)'},'fontsize',8+CONN_gui.font_offset,'horizontalalignment','left','callback',@conn_vproject_selectfiles_callback2,'tooltipstring','Define the activation/connectivity values');
 if ~isempty(viewrex), ht3=uicontrol(thfig,'style','checkbox','units','norm','position',[.1,.3,.8,.1],'string','enable REX gui','value',0,'fontsize',8+CONN_gui.font_offset,'horizontalalignment','left','backgroundcolor','w','tooltipstring','Displays REX gui interface for additional options'); end
 uicontrol(thfig,'style','pushbutton','string','OK','units','norm','position',[.1,.01,.38,.2],'callback','uiresume','fontsize',8+CONN_gui.font_offset);
@@ -2700,11 +2809,11 @@ if nargin==2&&isequal(THR_TYPE,'all')
     simfilename=fullfile(fileparts(spmfile),'nonparametric_p*.mat');
 else
     simfilename=char(arrayfun(@(a,b)fullfile(fileparts(spmfile),sprintf('nonparametric_p%d_%.8f.mat',a,b)),THR_TYPE,THR,'uni',0));
-    if ~isempty(dir(conn_prepend('parallel_*_',simfilename))), conn_process('results_nonparametric_collapse',simfilename); end
+    if ~isempty(conn_fileutils('dir',conn_prepend('parallel_*_',simfilename))), conn_process('results_nonparametric_collapse',conn_server('util_localfile',simfilename)); end
 end
 end
 
-function ok=conn_vproject_randomise(spmfile,THR_TYPE,THR,dogui)
+function ok=conn_vproject_randomise(spmfile,THR_TYPE,THR,dogui,isremote)
 ok=true;
 [tstr,tidx]=conn_jobmanager('profiles');
 tnull=find(strcmp('Null profile',tstr));
@@ -2722,7 +2831,15 @@ end
 fh=figure('units','norm','position',[.4,.4,.3,.2],'menubar','none','numbertitle','off','name','compute non-parametric statistics','color','w');
 h1=uicontrol('units','norm','position',[.1,.7,.4,.15],'style','text','string','# of new simulations: ','fontweight','bold','backgroundcolor',get(fh,'color'));
 h2=uicontrol('units','norm','position',[.5,.7,.4,.15],'style','edit','string',num2str(v2),'tooltipstring','<HTML>Number of new data permutations/randomizations that will be evaluated in order to compute cluster-level statistics<br/> - note: if already previously computed, these new simulations will be added to any pre-existing ones (e.g. to increase the total number of simulations)</HTML>');
-h3=uicontrol('style','popupmenu','units','norm','position',[.1,.2,.8,.15],'string',[{'local processing (run on this computer)'} tstr(tvalid)],'value',1,'callback',@conn_vproject_randomise_nowlater); 
+toptions=[{'local processing (run on this computer)'} tstr(tvalid)];
+if isremote
+    info=conn_server('HPC_info');
+    if isfield(info,'host')&&~isempty(info.host), tnameserver=info.host;
+    else tnameserver='CONN server';
+    end
+    toptions=regexprep(toptions(2:end),'\<run on (this computer)?',['run on ',tnameserver,' ']);
+end
+h3=uicontrol('style','popupmenu','units','norm','position',[.1,.2,.8,.15],'string',toptions,'value',1,'callback',@conn_vproject_randomise_nowlater); 
 %h3=uicontrol('style','popupmenu','units','norm','position',[.1,.2,.8,.15],'string',[{'local processing (run on this computer)' 'queue/script it (save as scripts to be run later)'} tstr(tvalid)],'value',1,'callback',@conn_vproject_randomise_nowlater); 
 %h3=uicontrol('units','norm','position',[.1,.5,.8,.25],'style','popupmenu','string',{'Run simulations now','Run simulations later'},'callback',@conn_vproject_randomise_nowlater);
 h4=uicontrol('units','norm','position',[.1,.5,.4,.15],'style','text','string','# of parallel jobs: ','fontweight','bold','backgroundcolor',get(fh,'color'),'visible','off');
@@ -2735,18 +2852,19 @@ if ishandle(fh),
     v3=get(h3,'value');
     v5=get(h5,'string');
     close(fh);
+    if isremote, v3=v3+1; end
     niters=v2;
     simfilename=conn_vproject_simfilename(spmfile,THR_TYPE,THR);
     maskfile=fullfile(fileparts(spmfile),'mask.nii');
     if niters<=0, return; end
     if ~conn_existfile(maskfile), maskfile=fullfile(fileparts(spmfile),'mask.img'); end
-    if conn_existfile(maskfile), mask=spm_read_vols(spm_vol(maskfile)); 
+    if conn_existfile(maskfile), mask=conn_fileutils('spm_read_vols',conn_fileutils('spm_vol',maskfile)); 
     else mask=[]; 
     end
     SIDE=1:3;
     THR=THR+[0 0 0];
     THR_TYPE=THR_TYPE+[0 0 0];
-    load(spmfile,'SPM');
+    SPM=struct; conn_loadmatfile(spmfile,'SPM');
     if isfield(SPM,'xX_multivariate')
         X=SPM.xX_multivariate.X;
         c=SPM.xX_multivariate.C;
@@ -2762,7 +2880,7 @@ if ishandle(fh),
     if v3==1, % now
         ht=conn_msgbox('Preparing data. Please wait...','results explorer',-1);
         try
-            a=spm_vol(char(SPM.xY.Y));
+            a=conn_fileutils('spm_vol',char(SPM.xY.Y));
         catch
             a=SPM.xY.VY;
         end
@@ -2770,7 +2888,7 @@ if ishandle(fh),
         if ~conn_existfile(a(1).fname), conn_msgbox({sprintf('Unable to find file %s',a(1).fname),'Please re-compute second-level model and try again'},'Outdated file references',2); return; end
         y=[];
         if isempty(mask)
-            y=spm_read_vols(a);
+            y=conn_fileutils('spm_read_vols',a);
             mask=~any(isnan(y),4)&any(diff(y,1,4)~=0,4);
             y=reshape(y,size(y,1)*size(y,2)*size(y,3),size(y,4));
             y=y(mask,:);
@@ -2778,7 +2896,7 @@ if ishandle(fh),
         fmask=find(mask);
         [i,j,k]=ind2sub(size(mask),fmask);
         xyz=[i(:) j(:) k(:)]';
-        if isempty(y), y=spm_get_data(a,xyz)'; end
+        if isempty(y), y=conn_fileutils('spm_get_data',a,xyz)'; end
         y=permute(reshape(y,size(y,1),size(X,1),[]),[2,3,1]);
         if conn_surf_dimscheck(a),
             surfparams=load(fullfile(fileparts(which(mfilename)),'utils','surf','surf_top.mat'),'A');
@@ -2803,12 +2921,14 @@ if ishandle(fh),
         end
         if ~conn_existfile(deblank(Y(1,:)))&&isfield(SPM,'swd')&&isempty(fileparts(deblank(Y(1,:)))),Y=cellstr(Y); for n=1:numel(Y), if isempty(fileparts(deblank(Y{n}))), Y{n}=fullfile(SPM.swd,Y{n}); end; end; Y=char(Y); end
         if ~conn_existfile(deblank(Y(1,:))), conn_msgbox({sprintf('Unable to find file %s',deblank(Y(1,:))),'Please re-compute second-level model and try again'},'Outdated file references',2); return; end
+        Y=conn_server('util_localfile',Y);
+        simfilename=conn_server('util_localfile',simfilename);
         N=str2num(v5);
         tfilename=fullfile(fileparts(spmfile),'args_nonparam.mat');
         niters=max(1,ceil(niters/N));
-        save(tfilename,'X','Y','c','m','THR','THR_TYPE','SIDE','niters','simfilename','mask','groupingsamples');
+        conn_savematfile(tfilename,'X','Y','c','m','THR','THR_TYPE','SIDE','niters','simfilename','mask','groupingsamples');
         conn_jobmanager('options','profile',parallel);
-        info=conn_jobmanager('submit','orphan_results_nonparametric',N,N,[],tfilename);
+        info=conn_jobmanager('submit','orphan_results_nonparametric',N,N,[],conn_server('util_localfile',tfilename));
         info=conn_jobmanager(info,'','donotupdate'); 
         ok=true; 
         %if v3>2, info=conn_jobmanager(info,'','donotupdate'); ok=true; 
@@ -2820,11 +2940,11 @@ if ishandle(fh),
         if isfield(SPM.xY,'Y'), Y=char(SPM.xY.Y);
         else Y=char({SPM.xY.VY.fname});
         end
-        if ~isempty(dir(fullfile(file2_path,[file2_name,'.m'])))
+        if conn_existfile(fullfile(file2_path,[file2_name,'.m']))
             answ=conn_questdlg(sprintf('Overwrite %s file?',fullfile(file2_path,[file2_name,'.m'])),'warning','Yes','No','Yes');
             if strcmp(answ,'No'), ok=false; return; end
         end
-        save(fullfile(file2_path,[file2_name,'.mat']),'X','Y','c','m','THR','THR_TYPE','SIDE','niters','simfilename','mask','groupingsamples');
+        conn_savematfile(fullfile(file2_path,[file2_name,'.mat']),'X','Y','c','m','THR','THR_TYPE','SIDE','niters','simfilename','mask','groupingsamples');
         conn_disp('fprintf','Created file %s\n',fullfile(file2_path,[file2_name,'.mat']));
         fh=fopen(fullfile(file2_path,[file2_name,'.m']),'wt');
         fprintf(fh,'load %s;\n',fullfile(file2_path,[file2_name,'.mat']));
@@ -2854,4 +2974,6 @@ end
         if v3==1, set([h4,h5],'visible','off'); else set([h4,h5],'visible','on'); end
     end
 end
+
+
 

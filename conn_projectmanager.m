@@ -4,13 +4,14 @@ function varargout = conn_projectmanager(option,varargin)
 % internal function: manages project access, delayed processing steps and parallelization/synchronization options
 %
 
-global CONN_x;
+global CONN_x CONN_gui;
 switch(lower(option))
     case 'null'
-        pobj.isextended=false;    % is this an extension of a different base project?
+        pobj.isextended=false;    % is this project an extension of a different base project?
         pobj.id='';
         pobj.holdsdata=true;      % has this project an independent data folder?
         pobj.importedfiles={};    % has this project just imported associated extended projects?
+        pobj.cache='';
         varargout={pobj};
         
     case 'extendedname', % checks if input filename indicates extended project
@@ -24,9 +25,12 @@ switch(lower(option))
             else pobj.holdsdata=true;
             end
             if numel(jid)>=4&&~isempty(jid{4}), pobj.partition=str2double(regexp(regexprep(jid{4},'^,\s*partition\s*=\s*',''),'-','split')); end
+            %pobj.importedfiles={};
+            pobj.cache='';
             if ~isequal(pobj.ver,conn('ver')), error('Incorrect CONN version. Expected %s, found %s. Parallel processing only supported when all nodes are running the same version of CONN',pobj.ver,conn('ver')); end
             filename=filename(1:jidx-1);
-            if ~isfield(pobj,'subjects'), filename=conn_projectmanager('localfilename',pobj); end % treat as normal project file
+            if conn_server('util_isremotefile',filename), filename=conn_server('util_localfile',filename); end % force distributed processes work with local project file
+            %if ~isfield(pobj,'subjects'), filename=conn_projectmanager('projectfile',filename,pobj); pobj.isextended=0; end % treat as normal project file
         else
             pobj=conn_projectmanager('null');
         end
@@ -70,7 +74,63 @@ switch(lower(option))
         else
             varargout={false};
         end
+        
+    case 'homedir'
+        if conn_projectmanager('inserver'), 
+            [a,b]=conn_server('run',mfilename,option,varargin{:}); 
+            varargout={conn_server('util_remotefile',a), conn_server('util_remotefile',b)}; 
+        else
+            if isdeployed, 
+                [nill,tfolder]=conn_jobmanager_checkdeployedname;           % conn folder
+                varargout={conn_fileutils('homedir'), tfolder};
+            else
+                varargout={conn_fileutils('homedir'), fileparts(which(mfilename))};
+            end
+        end
             
+    case 'machinetype'
+        if conn_projectmanager('inserver'), out=conn_server('run',mfilename,option,varargin{:}); 
+        else out=struct('ispc',ispc,'ismac',ismac,'isunix',isunix);
+        end
+        varargout={out};
+
+    case 'system' % note: no error if fails
+        if conn_projectmanager('inserver'), [ok,msg]=conn_server('run',mfilename,option,varargin{:});
+        else
+            try
+                [ok,msg]=system(varargin{:});
+            catch
+                ok=1; msg='unknown error';
+            end
+        end
+        if nargout>=1, varargout{1}=ok; end
+        if nargout>=2, varargout{2}=msg; end
+
+    case 'pwd' 
+        if conn_projectmanager('inserver'), out=conn_server('util_remotefile',conn_server('run',mfilename,option,varargin{:}));
+        else out=pwd;
+        end
+        varargout={out};
+        
+    case 'which'
+        if conn_projectmanager('inserver'), out=conn_server('util_remotefile',conn_server('run',mfilename,option,varargin{:}));
+        elseif iscell(varargin{1}), out=cellfun(@(x)which(x,varargin{2:end}),varargin{1},'uni',0);
+        else out=which(varargin{:});
+        end
+        varargout={out};
+        
+    case 'matlabroot'
+        if conn_projectmanager('inserver'), out=conn_server('util_remotefile',conn_server('run',mfilename,option,varargin{:}));
+        else out=matlabroot;
+        end
+        varargout={out};
+        
+    case 'getenv'
+        if conn_projectmanager('inserver'), out=conn_server('run',mfilename,option,varargin{:}); 
+        else out=getenv(varargin{:});
+        end
+        varargout={out};
+        
     case 'updateproject' % merges any extended projects (run after loading base project)
         if nargin>1, dogui=varargin{1};
         else dogui=true;
@@ -86,8 +146,8 @@ switch(lower(option))
                 vtag=true(size(utag));
                 for n=1:numel(utag)
                     pathname=fullfile(conn_prepend('',CONN_x.filename,'.qlog'),utag{n});
-                    if exist(pathname,'dir')&&conn_existfile(fullfile(pathname,'info.mat'))
-                        load(fullfile(pathname,'info.mat'),'info'); % look at associated .qlog folders
+                    if conn_existfile(pathname,2)&&conn_existfile(fullfile(pathname,'info.mat'))
+                        info=struct; conn_loadmatfile(fullfile(pathname,'info.mat'),'info'); % look at associated .qlog folders
                         info=conn_jobmanager('statusjob',info,[],true);
                         validlabels={'finished','canceled'}; %{'finished','stopped'};
                         vtag(n)=all(ismember(info.tagmsg,validlabels));
@@ -113,6 +173,14 @@ switch(lower(option))
             if ~isempty(allfiles)
                 conn_disp(allfiles);
                 conn_disp('fprintf','Merging finished jobs. Please wait...');
+%                 if conn_projectmanager('inserver')
+%                     conn_cache('push',CONN_x.pobj.cache);
+%                     conn_server('run','load',conn_server('util_localfile',CONN_x.pobj.cache));
+%                     conn_server('run','save');
+%                     conn_cache('pull',CONN_x.pobj.cache);
+% 
+%                     return
+%                 end
                 filename=CONN_x.filename;
                 pobj=CONN_x.pobj;
                 temp=load(deblank(allfiles(1,:)),'CONN_x','-mat');
@@ -135,7 +203,7 @@ switch(lower(option))
                             if isfield(CONN_x.Analyses(ianalysis),'name')&&isfield(CONN_x.Analyses(ianalysis),'sourcenames')
                                 filesourcenames=fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(ianalysis).name,'_list_sources.mat');
                                 filesourcenames=conn_projectmanager('projectfile',filesourcenames,struct('id',id{n},'isextended',true),'.mat');
-                                addfiles{end+1}=filesourcenames;
+                                addfiles{end+1}=conn_server('util_localfile',filesourcenames);
                             end
                         end
                         if isfield(CONN_x,'vvAnalyses')
@@ -143,14 +211,14 @@ switch(lower(option))
                                 if isfield(CONN_x.vvAnalyses(ianalysis),'name')&&isfield(CONN_x.vvAnalyses(ianalysis),'measurenames')
                                     filemeasurenames=fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(ianalysis).name,'_list_measures.mat');
                                     filemeasurenames=conn_projectmanager('projectfile',filemeasurenames,struct('id',id{n},'isextended',true),'.mat');
-                                    addfiles{end+1}=filemeasurenames;
+                                    addfiles{end+1}=conn_server('util_localfile',filemeasurenames);
                                 end
                             end
                         end
                         if isfield(CONN_x.Setup.conditions,'allnames')
                             fileconditionnames=fullfile(CONN_x.folders.preprocessing,'_list_conditions.mat');
                             fileconditionnames=conn_projectmanager('projectfile',fileconditionnames,struct('id',id{n},'isextended',true),'.mat');
-                            addfiles{end+1}=fileconditionnames;
+                            addfiles{end+1}=conn_server('util_localfile',fileconditionnames);
                         end
                     end
                     if ~isempty(addfiles)
@@ -231,6 +299,19 @@ switch(lower(option))
         if conn_existfile(filename), load(filename,'process','-mat'); end
         process=[process {varargin}];
         save(filename,'process');
+        
+    case 'inserver'
+        if isfield(CONN_gui,'isremote')&&CONN_gui.isremote>0, varargout={true}; 
+        else
+            try
+                if numel(varargin)>=1, filename=varargin{1};
+                else filename=CONN_x.filename;
+                end
+                varargout={conn_server('util_isremotefile',filename)};
+            catch
+                varargout={false};
+            end
+        end
         
     otherwise,
         error('unrecognized option',option);

@@ -50,7 +50,7 @@ for nsub=SUBJECTS,
         files=cellstr(CONN_x.Setup.spm{nsub}{1});
         for ifile=1:numel(files)
             %try,
-            spmfile=load(files{ifile});
+            spmfile=conn_loadmatfile(files{ifile});
             if options.addconditions
                 if isfield(spmfile.SPM,'xBF')&&isfield(spmfile.SPM.xBF,'UNITS'),
                     units=spmfile.SPM.xBF.UNITS;
@@ -59,7 +59,7 @@ for nsub=SUBJECTS,
                     else, conn_disp(['ERROR subject ',num2str(nsub),': invalid SPM.xBF.UNITS value (assuming scans)',' in file ',files{ifile}]); err=err+1; end
                 else, conn_disp(['ERROR subject ',num2str(nsub),': SPM.xBF.UNITS not found (assuming scans)',' in file ',files{ifile}]); units=1; err=err+1; end
             end
-            if importfunctional
+            if importfunctional||(options.addconditions&&units~=2)
                 if isfield(spmfile.SPM,'xY')&&isfield(spmfile.SPM.xY,'RT'),
                     if session_count>0&&CONN_x.Setup.RT(nsub)~=spmfile.SPM.xY.RT,
                         conn_disp(['warning subject ',num2str(nsub),': SPM.xY.RT different from previous session(s) (leaving unchanged)',' in file ',files{ifile}]);
@@ -197,7 +197,7 @@ for nsub=SUBJECTS,
                         if isempty(idx), idx=length(CONN_x.Setup.l1covariates.names); CONN_x.Setup.l1covariates.names{end+1}=' '; end
                         CONN_x.Setup.l1covariates.names{idx}=name;
                         CONN_x.Setup.l1covariates.files{nsub}{idx}{session_count}={'[raw values]',[],spmfile.SPM.Sess(nses).C.C};
-                    elseif ~isempty(dir(conn_prepend('rp_',filename1,'.txt'))),
+                    elseif conn_existfile(conn_prepend('rp_',filename1,'.txt')),
                         name='realignment';
                         idx=strmatch(name,CONN_x.Setup.l1covariates.names,'exact');
                         if isempty(idx), idx=length(CONN_x.Setup.l1covariates.names); CONN_x.Setup.l1covariates.names{end+1}=' '; end

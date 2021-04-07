@@ -26,7 +26,7 @@ if doconvert
         [pathname,name,ext]=spm_fileparts(filename(1,:));
     end
 end
-if size(filename,1)>=1&&isdir(deblank(filename(1,:)))
+if size(filename,1)>=1&&conn_fileutils('isdir',deblank(filename(1,:)))
     nV=size(filename,1);
     str=[{'Directory'},reshape(cellstr(filename),1,[])];
 %     try
@@ -53,32 +53,42 @@ else
             str={'DICOM file'};
         case {'.img','.hdr','.nii'},
             %maxvolsdisplayed=2;
-            if size(filename,1)==1
-                nfilename=nifti(filename);
+            issinglevolume=cellfun('length',regexp(cellstr(filename),',\d+$'))>0;
+            nV=sum(issinglevolume);
+            ok=false;
+            if all(issinglevolume)
+                try
+                    if nV>1
+                        V1=conn_fileutils('spm_vol',[deblank(filename(1,:))]);
+                        V2=conn_fileutils('spm_vol',[deblank(filename(end,:))]);
+                        V=[V1 V2];
+                        ok=true;
+                    end
+                end
+            elseif size(filename,1)==1
+                nfilename=conn_fileutils('nifti',filename);
                 nV=0; for n=1:numel(nfilename), tV=size(nfilename(n).dat,4); nV=nV+tV; end
-                ok=false;
                 try
                     if nV>10
-                        V1=spm_vol([deblank(filename),',1']);
-                        V2=spm_vol([deblank(filename),',',num2str(nV)]);
+                        V1=conn_fileutils('spm_vol',[deblank(filename),',1']);
+                        V2=conn_fileutils('spm_vol',[deblank(filename),',',num2str(nV)]);
                         V=[V1 V2];
                         ok=true;
                     end
                 end
             else
-                nV=size(filename,1);
-                ok=false;
                 try
-                    if nV>10
-                        V1=spm_vol([deblank(filename(1,:))]);
-                        V2=spm_vol([deblank(filename(end,:))]);
-                        V=[V1 V2];
-                        ok=true;
-                    end
+                    V1=conn_fileutils('spm_vol',[deblank(filename(1,:))]);
+                    V2=conn_fileutils('spm_vol',[deblank(filename(end,:))]);
+                    V=[V1(1) V2(end)];
+                    nfilename=conn_fileutils('nifti',cellstr(filename(~issinglevolume,:)));
+                    for n=1:numel(nfilename), tV=size(nfilename(n).dat,4); nV=nV+tV; end
+                    ok=true;
                 end
             end
-            if ~ok, V=spm_vol(filename); end
+            if ~ok, V=conn_fileutils('spm_vol',filename); nV=numel(V); end
             %V=spm_vol(filename);
+            if isfield(V,'private'), [V.private]=deal([]); end
             if length(V)==1, icon=V;
             else icon=V([1,end]);
                 %else icon=V(reshape(unique(round(linspace(1,numel(V),maxvolsdisplayed))),1,[]));
@@ -86,7 +96,9 @@ else
         case {'.tal','.mat','.txt','.par','.1d','.csv','.tsv'},
             nV=size(filename,1);
             for n1=1:nV,
-                x=conn_loadtextfile(deblank(filename(n1,:)));
+                if strcmp(ext(1:min(4,length(ext))),'.mat'), x=conn_loadmatfile(deblank(filename(n1,:)));
+                else x=conn_loadtextfile(deblank(filename(n1,:)));
+                end
                 if isstruct(x), 
                     names=fieldnames(x); 
                     try, x=cell2mat(cellfun(@(n)x.(n),names(:)','uni',0)); names=deblank(sprintf('%s ',names{:})); 
@@ -99,8 +111,8 @@ else
                     if strcmp(names,'CONN_x')&&isstruct(x)
                         V(n1).dim=x.Setup.nsubjects;
                         V(n1).fname=deblank(filename(n1,:));
-                        temp=spm_vol(x.Setup.structural{1}{1}{1});
-                        if x.Setup.nsubjects>1, temp=[temp spm_vol(x.Setup.structural{x.Setup.nsubjects}{1}{1})]; end
+                        temp=conn_fileutils('spm_vol',x.Setup.structural{1}{1}{1});
+                        if x.Setup.nsubjects>1, temp=[temp conn_fileutils('spm_vol',x.Setup.structural{x.Setup.nsubjects}{1}{1})]; end
                         icon=cat(2,icon,temp);
                         tok=true;
                     elseif strcmp(names,'SPM')&&isstruct(x)
@@ -130,9 +142,9 @@ else
                 if ~tok
                     V(n1).dim=size(x);
                     V(n1).fname=deblank(filename(n1,:));
-                    if isnumeric(x) && (n1==1 || n1==size(filename,1)),
-                        icon=cat(2,icon,x(:,:));
-                    end
+                    %if isnumeric(x) && (n1==1 || n1==size(filename,1)),
+                    %    icon=cat(2,icon,x(:,:));
+                    %end
                 end
             end
         otherwise,

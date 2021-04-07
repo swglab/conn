@@ -1,6 +1,10 @@
 function niifilename = conn_annot2nii(varargin)
 % CONN_ANNOT2NII lh.filename.annot rh.filename.annot
 % converts freesurfer .annot file into .nii/.txt surface nifti ROI file
+%
+% filename = conn_annot2nii(filename)
+%
+
 
 FORCEREDO=false; % forces creation of target file even if it already exists
 
@@ -8,6 +12,7 @@ if nargin==1&&ischar(varargin{1}), roifiles=varargin;
 elseif nargin==1&&iscell(varargin{1}), roifiles=varargin{1};
 else roifiles=varargin;
 end
+if any(conn_server('util_isremotefile',roifiles)), niifilename=conn_server('util_remotefile',conn_server('run',mfilename,conn_server('util_localfile',roifiles))); return; end
 
 if numel(roifiles)==1
     [file_path,file_name,file_ext]=fileparts(roifiles{1});
@@ -52,11 +57,15 @@ for nfile1=1:numel(log.name)
             dim0=conn_surf_dims(8);
             dim=dim0.*[1 1 2];
             converted=true;
+            FS_folder=[];
             if (numel(log.data{ifile(1)})~=prod(dim0)||numel(log.data{ifile(2)})~=prod(dim0))&&isequal(log.folder{ifile(1)},log.folder{ifile(2)}) % converts subject-space to fsaverage
-                [FS_folder,fname1,fext1]=fileparts(log.folder{ifile(1)});
-                if strcmp(fname1,'label')&&conn_existfile(fullfile(FS_folder,'surf','lh.sphere.reg'))&&conn_existfile(fullfile(FS_folder,'surf','rh.sphere.reg'))
-                    xyz_ref1=conn_freesurfer_read_surf(fullfile(FS_folder,'surf','lh.sphere.reg'));
-                    xyz_ref2=conn_freesurfer_read_surf(fullfile(FS_folder,'surf','rh.sphere.reg'));
+                [fpath1,fname1,fext1]=fileparts(log.folder{ifile(1)});
+                if strcmp(fname1,'label')&&conn_existfile(fullfile(fpath1,'surf','lh.sphere.reg'))&&conn_existfile(fullfile(fpath1,'surf','rh.sphere.reg')), FS_folder=fullfile(fpath1,'surf');
+                elseif conn_existfile(fullfile(log.folder{ifile(1)},'lh.sphere.reg'))&&conn_existfile(fullfile(log.folder{ifile(1)},'rh.sphere.reg')), FS_folder=log.folder{ifile(1)};
+                end
+                if ~isempty(FS_folder)
+                    xyz_ref1=conn_freesurfer_read_surf(fullfile(FS_folder,'lh.sphere.reg'));
+                    xyz_ref2=conn_freesurfer_read_surf(fullfile(FS_folder,'rh.sphere.reg'));
                     if size(xyz_ref1,1)==numel(log.data{ifile(1)})&&size(xyz_ref2,1)==numel(log.data{ifile(2)}), converted=false; end
                 end
             end
@@ -89,9 +98,10 @@ for nfile1=1:numel(log.name)
                         fprintf(fh,'%s\n',names_rois{n});
                     end
                     fclose(fh);
+                    try, conn_surf_surf2vol(fname,[],FS_folder,.5); end
                 end
                 %fprintf('Created file %s\n',fname);
-            else mismatchedsize=numel(data);
+            else mismatchedsize=numel(log.data{ifile(1)})+numel(log.data{ifile(2)});
             end
         end
     end

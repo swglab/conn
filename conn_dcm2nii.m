@@ -21,9 +21,16 @@ function [filenameout,filetypeout,fileRTout,filedescripout,filename]=conn_dcm2ni
 
 persistent saved;
 
+if any(conn_server('util_isremotefile',filename)), 
+    [filenameout,filetypeout,fileRTout,filedescripout,filename]=conn_server('run',mfilename,conn_server('util_localfile',filename),varargin{:}); 
+    filenameout=conn_server('util_remotefile',filenameout);
+    return; 
+end
+
 if isempty(saved), 
     saved.folderout='../nii';
     saved.overwrite=false;
+    saved.renamefiles=false;
     saved.spm_dicom_convert_opts='all';
     saved.spm_dicom_convert_root_dir='flat';
     saved.spm_dicom_convert_format=spm_get_defaults('images.format');
@@ -37,6 +44,7 @@ if nargin>1,
         switch(varargin{n})
             case 'folderout', this.folderout=varargin{n+1};
             case 'overwrite', this.overwrite=varargin{n+1};
+            case 'renamefiles', this.renamefiles=varargin{n+1};
             case 'opts', this.spm_dicom_convert_opts=varargin{n+1};
             case 'root_dir', this.spm_dicom_convert_root_dir=varargin{n+1};
             case 'format', this.spm_dicom_convert_format=varargin{n+1};
@@ -96,25 +104,26 @@ for n0=1:numel(filename)
             continue
         end
         tfilename=char(filename(n0).files);
-        [filesout_path,filesout_name,filesout_ext]=fileparts(deblank(tfilename(1,:)));
-        filesout_name=sprintf('run-%s.nii',uSN{n0}); %filename(n0).SeriesNumber);
     else
         tfilename=char(filename{n0});
-        [filesout_path,filesout_name,filesout_ext]=fileparts(deblank(tfilename(1,:)));
-        filesout_name=[filesout_name,filesout_ext];
-        filesout_name=regexprep(filesout_name,'-1\.dcm$','.nii');
+    end
+    [filesout_path,filesout_name,filesout_ext]=fileparts(deblank(tfilename(1,:)));
+    if this.renamefiles
+        filesout_name=sprintf('run-%s.nii',uSN{n0}); %filename(n0).SeriesNumber);
+    else
+        filesout_name=conn_prepend('',regexprep([filesout_name, filesout_ext],'-1\.dcm$',''),'.nii');
     end
     switch(lower(this.folderout))
         case './',
         case './nii',  filesout_path=fullfile(filesout_path,'nii');
-            [ok,nill]=mkdir(filesout_path);
+            conn_fileutils('mkdir',filesout_path);
         case '../nii', filesout_path=fullfile(fileparts(filesout_path),'nii');
-            [ok,nill]=mkdir(filesout_path);
+            conn_fileutils('mkdir',filesout_path);
         otherwise,
             if ~isempty(this.folderout)&&this.folderout(1)=='.', filesout_path=fullfile(filesout_path,this.folderout);
             else filesout_path=this.folderout;
             end
-            [ok,nill]=mkdir(filesout_path);
+            conn_fileutils('mkdir',filesout_path);
     end
     if ~isempty(logfile)&&isequal(bak_filesout_path,0)
         bak_filesout_path=filesout_path;

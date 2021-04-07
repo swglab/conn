@@ -13,6 +13,10 @@ function varargout=conn(varargin)
 % conn    
 %   launches conn GUI 
 %
+% conn remotely
+%   launches conn GUI interacting with remote CONN session
+%   see also CONN_SERVER
+%
 % conn batch filename
 %   executes batch file (.m or .mat file)
 %   see also CONN_BATCH
@@ -21,14 +25,14 @@ function varargout=conn(varargin)
 % alfnie@gmail.com
 %
 
-connver='20.a';
+connver='20.c';
 dodebug=false;
 
 global CONN_h CONN_x CONN_gui;
 if dodebug, dbstop if caught error; end
 me=[]; 
 try 
-if nargin<1,
+if nargin<1 || (ischar(varargin{1})&&~isempty(regexp(varargin{1},'^lite$|^guiisremote$'))),
     connversion={'CONN functional connectivity toolbox',' (',connver,') '};
     hfig=findobj('tag',connversion{1});
     if ~isempty(hfig),figure(hfig); return;end
@@ -36,8 +40,8 @@ if nargin<1,
          warning('off','MATLAB:load:variableNotFound');
          warning('off','MATLAB:DELETE:FileNotFound');
     end
-    conn_backgroundcolor=.12*[1 1.05 1.1];                 % backgroundcolor
-    conn_backgroundcolorA=.19*[1 1.05 1.1];                % highlight
+    conn_backgroundcolor=.10*[1 1.05 1.1];                 % backgroundcolor
+    conn_backgroundcolorA=.15*[1 1.05 1.1];                % highlight
     if ismac, CONN_gui.uicontrol_border=2;            % crops borders GUI elements
     else      CONN_gui.uicontrol_border=2;
     end
@@ -87,6 +91,9 @@ if nargin<1,
     CONN_gui.status=0;
     CONN_gui.warnloadbookmark={};
     if ismac, CONN_gui.rightclick='control'; CONN_gui.keymodifier='command'; else CONN_gui.rightclick='right'; CONN_gui.keymodifier='ctrl'; end
+    if ~isempty(varargin)&&isequal(varargin{1},'guiisremote'), CONN_gui.isremote=true;
+    else CONN_gui.isremote=false;
+    end
 	CONN_h=struct;
     cmap=0+1*(7*gray(128) + 1*(hot(128)))/8; if mean(CONN_gui.backgroundcolor)>.5,cmap=flipud(cmap); end
     cmapB=max(0,min(1, repmat((2*(CONN_gui.backgroundcolor<.5)-1).*max(CONN_gui.backgroundcolor ,1-CONN_gui.backgroundcolor),128,1).*cmap+repmat(CONN_gui.backgroundcolor,128,1) ));
@@ -94,15 +101,19 @@ if nargin<1,
     jetmap=jet(192); jetmap=jetmap(32+(1:128),:); %[linspace(.1,1,64)',zeros(64,2)];jetmap=[flipud(fliplr(jetmap));jetmap];
     CONN_h.screen.colormap=max(0,min(1, diag((1-linspace(1,0,256)'.^50))*[cmapB;jetmap]+(linspace(1,0,256)'.^50)*min(CONN_gui.backgroundcolor,1-CONN_gui.backgroundcolor) ));
     CONN_h.screen.colormapA=max(0,min(1, diag((1-linspace(1,0,256)'.^50))*[cmapA;jetmap]+(linspace(1,0,256)'.^50)*min(CONN_gui.backgroundcolorA,1-CONN_gui.backgroundcolorA) ));
-    h0=get(0,'screensize'); h0=h0(1,3:4)-h0(1,1:2)+1; h0=h0/max(1,max(abs(h0))/2000);
+    h0=get(0,'screensize'); h0=h0(1,3:4)-h0(1,1:2)+1; h0(1)=min(h0(1),2*h0(2)); %h0=h0/max(1,max(abs(h0))/2000);
     %if any(h0(3:4)<[1200 700]), fprintf('Increase resolution size for optimal viewing\n(screen resolution %dx%d; minimum recommended %dx%d\n)',h0(3),h0(4),1200,700); end
-    minheight=500;
+    if ~isempty(varargin)&&isequal(varargin{1},'lite'), h0=h0/2; minheight=250;
+    else minheight=500;
+    end
     tname=strcat(connversion{:});
     if isdeployed, tname=strcat(tname,' (standalone)'); end
 	CONN_h.screen.hfig=figure('units','pixels','position',[0*72+1,h0(2)-max(minheight,.5*h0(1))-48,h0(1)-0*72-1,max(minheight,.5*h0(1))],'color',CONN_gui.backgroundcolor,'doublebuffer','on','tag',connversion{1},'name',tname,'numbertitle','off','menubar','none','resize','on','colormap',CONN_h.screen.colormap,'closerequestfcn',@conn_closerequestfcn,'deletefcn',@conn_deletefcn,'resizefcn',@conn_resizefcn,'interruptible','off');
     try, if isequal(datestr(now,'mmdd'),'0401'), conn_guibackground('setfiledefault',[],'True color'); end; end
     conn_menuframe;
-    ht=conn_menu('text0c',[.3 .7 .4 .2],'','CONN'); set(ht,'fontunits','norm','fontsize',.5,'horizontalalignment','center','color',[0 0 0]+(mean(CONN_gui.backgroundcolor)<.5));
+    if CONN_gui.isremote, ht=conn_menu('text0c',[.3 .7 .4 .2],'','CONN remotely'); set(ht,'fontunits','norm','fontsize',.5,'horizontalalignment','center','color',[0 0 0]+(mean(CONN_gui.backgroundcolor)<.5));
+    else ht=conn_menu('text0c',[.3 .7 .4 .2],'','CONN'); set(ht,'fontunits','norm','fontsize',.5,'horizontalalignment','center','color',[0 0 0]+(mean(CONN_gui.backgroundcolor)<.5));
+    end
     imicon=imread(fullfile(fileparts(which(mfilename)),'conn_icon.jpg')); ha=axes('units','norm','position',[.425 .3 .15 .4],'parent',CONN_h.screen.hfig);him=image(conn_bsxfun(@plus,shiftdim([.1 .1 .1],-1),conn_bsxfun(@times,.5*shiftdim(1-[.1 .1 .1],-1),double(imicon)/255)),'parent',ha);axis(ha,'equal','off');
     conn_menu_plotmatrix('',CONN_h.screen.hfig,[20 1 10],[.425 .2 .15 .1]);
     hax=axes('units','norm','position',[0 0 1 1],'parent',CONN_h.screen.hfig);
@@ -112,7 +123,7 @@ if nargin<1,
         drawnow;
         set(h,'fontunits','points');
         tfontsize=get(h,'fontsize');
-        conn_font_offset=max(-4,round(tfontsize)-8);
+        conn_font_offset=max(-4,round(tfontsize)-6);
         %fprintf('Font size change %dpts to %dpts (%f %s)\n',8+CONN_gui.font_offset,8+conn_font_offset,tfontsize,mat2str([get(0,'screensize') get(gca,'position')]));
         CONN_gui.font_offset=conn_font_offset;
     end
@@ -122,7 +133,7 @@ if nargin<1,
             tsize=javaMethod('values','com.mathworks.widgets.BusyAffordance$AffordanceSize');
             CONN_h.menus.waiticonObj=com.mathworks.widgets.BusyAffordance(tsize(1), '');
             pos=get(CONN_h.screen.hfig,'position');
-            CONN_h.menus.waiticon=javacomponent(CONN_h.menus.waiticonObj.getComponent, [pos(3)-16-4,.95*pos(4)-16-1,16,16], CONN_h.screen.hfig);
+            CONN_h.menus.waiticon=javacomponent(CONN_h.menus.waiticonObj.getComponent, [pos(3)-16-1,.95*pos(4)-16+3,16,16], CONN_h.screen.hfig);
             set(CONN_h.menus.waiticon,'Background',java.awt.Color(CONN_gui.backgroundcolor(1),CONN_gui.backgroundcolor(2),CONN_gui.backgroundcolor(3)));
             CONN_h.menus.waiticonObj.useWhiteDots(mean(CONN_gui.backgroundcolor)<.5);
             CONN_h.menus.waiticonObj.start;
@@ -136,6 +147,7 @@ if nargin<1,
     conn importrois;
     CONN_x.gui=1;
     CONN_gui.newversionavailable=false;
+    clear conn_filesearchtool
     try, if CONN_gui.checkupdates, [nill,CONN_gui.newversionavailable]=conn_update([],[],2); end; end
 	conn_menumanager on;
 	CONN_h.menus.m_setup_02sub=conn_menumanager([], 'n',8,...
@@ -236,7 +248,7 @@ if nargin<1,
                                     'order','vertical',...
                                     'toggle',0,...
                                     'roll',1,...
-									'position',[.29,.955-3.5*.045-3.5*.045-8*.045,.099,8*.045],...
+									'position',[.29,.955-4.5*.045-3.5*.045-8*.045,.099,8*.045],...
 									'fontsize',8,...
                                     'bordertype','square',...
 									'callback',{{@conn,'gui_help','url','http://www.nitrc.org/forum/forum.php?forum_id=1144'},{@conn,'gui_help','url','http://www.alfnie.com/software/conn'},{@conn,'gui_help','url','http://www.conn-toolbox.org/fmri-methods'},{@conn,'gui_help','url','http://www.conn-toolbox.org/tutorials'},{@conn,'gui_help','url','http://www.conn-toolbox.org'},{@conn,'gui_help','url','http://www.nitrc.org/projects/conn'},{@conn,'gui_help','url','http://www.fil.ion.ucl.ac.uk/spm'},{@conn_register,'forceregister'}} );
@@ -246,20 +258,20 @@ if nargin<1,
                                     'order','vertical',...
                                     'toggle',0,...
                                     'roll',1,...
-									'position',[.29,.955-3.5*.045-2.5*.045-2*.045,.099,2*.045],...
+									'position',[.29,.955-4.5*.045-2.5*.045-2*.045,.099,2*.045],...
 									'fontsize',8,...
                                     'bordertype','square',...
 									'callback',{{@conn,'gui_workshop'},{@conn_batch_workshop_nyudataset}} );
-	CONN_h.menus.m_setup_07c=conn_menumanager([],	'n',5,...
-									'string',{'CONN Manual','Info: Batch Processing', 'Info: Cluster Computing','Workshops','Web resources'},...
-									'help',{'Open CONN toolbox manual','See batch processing help','See Cluster/HPC computing help','Workshops', 'Web resources'},...
+	CONN_h.menus.m_setup_07c=conn_menumanager([],	'n',6,...
+									'string',{'CONN Manual','Info: Batch Processing', 'Info: Parallel Computing', 'Info: CONN remotely', 'Workshops','Web resources'},...
+									'help',{'Open CONN toolbox manual','See batch processing help','See Cluster/HPC computing help','See help on using CONN remotely', 'Workshops', 'Web resources'},...
                                     'order','vertical',...
                                     'toggle',0,...
                                     'roll',1,...
-									'position',[.18,.955-2.5*.045-5*.045,.15,5*.045],...
+									'position',[.18,.955-2.5*.045-6*.045,.15,6*.045],...
 									'fontsize',8,...
                                     'bordertype','square',...
-									'callback',{{@conn,'gui_help','doc'},{@conn,'gui_help','help','conn_batch.m'},{@conn,'gui_help','help','conn_grid.m'},CONN_h.menus.m_setup_07g,CONN_h.menus.m_setup_07d} );
+									'callback',{{@conn,'gui_help','doc'},{@conn,'gui_help','help','conn_batch.m'},{@conn,'gui_help','help','conn_grid.m'},{@conn,'gui_help','help','conn_remotely.m'},CONN_h.menus.m_setup_07g,CONN_h.menus.m_setup_07d} );
 	CONN_h.menus.m_setup_07b=conn_menumanager([],	'n',4,...
 									'string',{'Search help','Check for updates','Documentation','About CONN'},...
 									'help',{'Search on a database of support questions','Check for software updates','Documentation',''},...
@@ -287,7 +299,7 @@ if nargin<1,
                                     'order','vertical',...
                                     'toggle',0,...
                                     'roll',1,...
-									'position',[.0,.955-7*.045,.129,7*.045],...%[.09,.88-6*.05,.08,6*.05],...
+									'position',[.0,.955-7*.045,.135,7*.045],...%[.09,.88-6*.05,.08,6*.05],...
 									'fontsize',8,...
                                     'bordertype','square',...
 									'callback',{{@conn,'gui_setup_load'},CONN_h.menus.m_setup_01c,{@conn,'gui_setup_new'},CONN_h.menus.m_setup_07i,{@conn,'gui_setup_save'},{@conn,'gui_setup_saveas'},{@conn,'gui_setup_close'}} ); %,{@conn,'gui_setup_merge'}} );
@@ -700,7 +712,6 @@ else
                     'Analyses',struct(...
                     'name','SBC_01',...
                     'sourcenames',{{}},...
-                    'variables', struct('names',{{}},'types',{{}},'deriv',{{}},'fbands',{{}},'dimensions',{{}}),...
                     'regressors',	struct('names',{{}},'types',{{}},'deriv',{{}},'fbands',{{}},'dimensions',{{}}),...
                     'type',3,...
                     'measure',1,...
@@ -709,6 +720,7 @@ else
                     'weight',2,...
                     'sources',{{}}),...
                     'Analysis',1,...
+                    'Analysis_variables', struct('names',{{}},'types',{{}},'deriv',{{}},'fbands',{{}},'dimensions',{{}}),...
                     'dynAnalyses',repmat(struct(...
                     'name','DYN_01',...
                     'regressors', struct('names',{{}}),...
@@ -809,7 +821,7 @@ else
         case 'importrois',
             if ~isfield(CONN_x.folders,'rois'), CONN_x.folders.rois=fullfile(fileparts(which(mfilename)),'rois'); end
             path=CONN_x.folders.rois;
-            names=cat(1,dir(fullfile(path,'*.nii')),dir(fullfile(path,'*.img')),dir(fullfile(path,'*.tal')));
+            names=cat(1,conn_dirn(fullfile(path,'*.nii')),conn_dirn(fullfile(path,'*.img')),conn_dirn(fullfile(path,'*.tal')));
             names={names(:).name};
             names=names(setdiff(1:numel(names),strmatch('._',names)));
             if isequal(names,{'atlas.nii','networks.nii'}), names={'networks.nii','atlas.nii'}; end
@@ -828,7 +840,7 @@ else
                 CONN_x.Setup.rois.mask(n0+n1)=0;
                 CONN_x.Setup.rois.subjectspecific(n0+n1)=0;
                 CONN_x.Setup.rois.sessionspecific(n0+n1)=0;
-                CONN_x.Setup.rois.multiplelabels(n0+n1)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',filename,'.txt')))|~isempty(dir(conn_prepend('',filename,'.csv')))|~isempty(dir(conn_prepend('',filename,'.xls'))));
+                CONN_x.Setup.rois.multiplelabels(n0+n1)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',filename,'.txt'))|conn_existfile(conn_prepend('',filename,'.csv'))|conn_existfile(conn_prepend('',filename,'.xls')));
                 CONN_x.Setup.rois.regresscovariates(n0+n1)=double(CONN_x.Setup.rois.dimensions{n0+n1}>1);
                 CONN_x.Setup.rois.unsmoothedvolumes(n0+n1)=1;
                 CONN_x.Setup.rois.weighted(n0+n1)=0;
@@ -839,6 +851,8 @@ else
             else filename=CONN_x.filename; end
             if nargin>2,fromgui=varargin{3}; 
             else fromgui=false; end
+            if nargin>3,forcecheck=varargin{4}; 
+            else forcecheck=fromgui; end
             if isempty(filename)||~ischar(filename),
                 conn_disp('warning: invalid filename, project NOT loaded');
             else
@@ -848,23 +862,59 @@ else
 				try 
                     if ~pobj.isextended||conn_existfile(localfilename), 
                         errstr=localfilename; 
-                        load(localfilename,'CONN_x','-mat'); 
+                        if conn_server('util_isremotefile',localfilename) %conn_projectmanager('inserver',localfilename), 
+                            assert(conn_server('isconnected'),'unable to connect to CONN server. Use "conn_server connect ..." command to re-connect to server and try again');
+                            conn_server('run','conn','load',conn_server('util_localfile',localfilename),false,true);
+                            conn_server('run','conn','save');
+                            pobj.cache=conn_cache('pull',localfilename);
+                            vars=load(pobj.cache,'CONN_x','-mat');
+                            CONN_gui.isremote=true;
+                        else
+                            vars=load(localfilename,'CONN_x','-mat');
+                            pobj.cache='';
+                            CONN_gui.isremote=false;
+                        end
+                        CONN_x=vars.CONN_x;
+                        clear vars;
                         [nill,nill,fext]=fileparts(localfilename);
                         if isempty(fext), localfilename=conn_prepend('',localfilename,'.mat'); end
-                    else errstr=basefilename; load(basefilename,'CONN_x','-mat'); 
+                    else
+                        errstr=basefilename; 
+                        vars=load(basefilename,'CONN_x','-mat'); 
+                        pobj.cache='';
+                        CONN_gui.isremote=false;
+                        CONN_x=vars.CONN_x;
+                        clear vars;
                     end
                     folderchanged{1}=fileparts(CONN_x.filename);
                     folderchanged{2}=fileparts(errstr);
-                    if pobj.holdsdata,
-                        try
-                            if ispc, [nill,nill]=system(sprintf('copy "%s" "%s"',localfilename,fullfile(conn_prepend('',localfilename,''),'bakfile.mat')));
-                            else     [nill,nill]=system(sprintf('cp ''%s'' ''%s''',localfilename,fullfile(conn_prepend('',localfilename,''),'bakfile.mat')));
-                            end
-                        end
+                    if pobj.holdsdata&&isempty(pobj.cache),
+                        try, conn_fileutils('copyfile',localfilename,fullfile(conn_prepend('',localfilename,''),'bakfile.mat')); end
+                        %if isfield(pobj,'cache')&&~isempty(pobj.cache)
+                        %end
+                        %if ispc, [nill,nill]=system(sprintf('copy "%s" "%s"',localfilename,fullfile(conn_prepend('',localfilename,''),'bakfile.mat')));
+                        %else     [nill,nill]=system(sprintf('cp ''%s'' ''%s''',localfilename,fullfile(conn_prepend('',localfilename,''),'bakfile.mat')));
+                        %end
                     end
-                catch %#ok<*CTCH>
-                    error(['Failed to load file ',errstr,'.']); 
-                    return; 
+                catch me,%#ok<*CTCH>
+                    if ~isempty(me)&&fromgui&&pobj.holdsdata&&~isempty(regexp(char(getReport(me,'basic','hyperlinks','off')),'File might be corrupt'))&&~isempty(regexp(errstr,'\.mat$'))&&conn_existfile(regexprep(errstr,'\.mat$',[filesep,'bakfile.mat']))
+                        answ=conn_questdlg({'WARNING!!!',sprintf('This CONN project file (%s) appears to be corrupted',errstr),sprintf('Attempt to repair this file using latest backup?',connver)},'','Proceed','Cancel','Cancel');
+                        if isequal(answ,'Cancel')
+                            error(['Failed to load file ',errstr,'.']);
+                            return;
+                        end
+                        try
+                            vars=load(regexprep(errstr,'\.mat$',[filesep,'bakfile.mat']),'CONN_x','-mat');
+                            CONN_x=vars.CONN_x;
+                            clear vars;
+                        catch
+                            error(['Failed to load file ',errstr,'.']);
+                            return;
+                        end
+                    else
+                        error(['Failed to load file ',errstr,'.']);
+                        return;
+                    end
                 end
                 if fromgui, CONN_x.gui=1; end
                 if ~pobj.isextended&&isfield(CONN_x,'pobj')&&isfield(CONN_x.pobj,'isextended')&&CONN_x.pobj.isextended, % note: fix when attempting to load an extended project directly (e.g. conn load conn_test.#.dmat) instead of indirectly (e.g. conn load conn_test.mat?id=#)
@@ -875,8 +925,17 @@ else
                 else CONN_x.filename=conn_fullfile(basefilename);
                 end
                 CONN_x.pobj=pobj;
-                if pobj.holdsdata, conn_updatefolders; end
-                conn_projectmanager('updateproject',fromgui);
+                if CONN_x.pobj.holdsdata&&isempty(CONN_x.pobj.cache), conn_updatefolders; 
+                else, conn_updatefolders([],false); 
+                end
+                if isempty(CONN_x.pobj.cache), conn_projectmanager('updateproject',fromgui); end % merge files if necessary
+                if isempty(CONN_x.pobj.cache), 
+                    conn_updatefilepaths('localfile',{},{}); 
+                    conn_updatefilepaths('hold','off');
+                else
+                    conn_updatefilepaths('remotefile',{},{}); 
+                    conn_updatefilepaths('hold','off');
+                end
                 if fromgui,
                 	CONN_x.gui=1;
                     try
@@ -884,8 +943,9 @@ else
                             conn_disp('Updating folder references');
                             conn_updatefilepaths('silent', folderchanged{:}); %conn_updatefilepaths('add', folderchanged{:}); 
                             conn_updatefilepaths('hold','off');
+                            folderchanged={};
                         end
-                        conn_updatefilepaths;
+                        if isempty(CONN_x.pobj.cache), conn_updatefilepaths; end
                     end
                     if isfield(CONN_x,'lastver')&&~isempty(CONN_x.lastver)&&~conn('checkver',CONN_x.lastver)
                         answ=conn_questdlg({'WARNING!!!',sprintf('This CONN project has been saved using a more recent version of CONN (%s)',CONN_x.lastver),sprintf('Proceeding to load this project using CONN %s may cause serious compatibility problems',connver)},'','Proceed','Cancel','Cancel');
@@ -896,14 +956,12 @@ else
                             return;
                         end
                     end
-%                 else
-%                     try
-%                         if numel(folderchanged)==2&&~isempty(folderchanged{1})&&~isempty(folderchanged{2})&&~isequal(folderchanged{:}), 
-%                             conn_disp('Updating folder references. Please wait...');
-%                             conn_updatefilepaths('silent', folderchanged{:}); 
-%                             conn_updatefilepaths('hold','off');
-%                         end
-%                     end
+                elseif forcecheck
+                    if numel(folderchanged)==2&&~isempty(folderchanged{1})&&~isempty(folderchanged{2})&&~isequal(folderchanged{:}),
+                        conn_updatefilepaths('silent', folderchanged{:});
+                        conn_updatefilepaths('hold','off');
+                        folderchanged={};
+                    end
                 end
                 CONN_x.lastver=connver; 
                 CONN_x.isready(1)=1;
@@ -918,19 +976,38 @@ else
                 saveas=~isequal(filename,CONN_x.filename);
                 CONN_x.filename=conn_fullfile(filename);
                 if CONN_x.pobj.holdsdata, 
-                    localfilename=CONN_x.filename;
-                    conn_updatefolders;
+                    if conn_server('util_isremotefile',CONN_x.filename)&&isempty(CONN_x.pobj.cache)
+                        assert(conn_server('isconnected'),'unable to connect to CONN server. Use "conn_server connect ..." command to re-connect to server and try again');
+                        CONN_x.pobj.cache=conn_cache('new',CONN_x.filename);
+                        localfilename=CONN_x.pobj.cache;
+                        conn_updatefolders([],false); 
+                    elseif isfield(CONN_x.pobj,'cache')&&~isempty(CONN_x.pobj.cache), 
+                        assert(conn_server('isconnected'),'unable to connect to CONN server. Use "conn_server connect ..." command to re-connect to server and try again');
+                        localfilename=CONN_x.pobj.cache;
+                        conn_updatefolders([],false); 
+                    else
+                        localfilename=CONN_x.filename;
+                        conn_updatefolders;
+                    end
                 else
                     localfilename=conn_projectmanager('projectfile');
                 end
                 try
                     save(localfilename,'CONN_x');
+                    version73=false; 
+                    try, version73=isempty(whos('-file',localfilename)); end 
+                    if version73, save(localfilename,'CONN_x','-v7.3'); end % note: try 7.3 if failed to save (e.g. >2Gb -v7)
+                    if isfield(CONN_x.pobj,'cache')&&~isempty(CONN_x.pobj.cache),
+                        localfilename=CONN_x.filename;
+                        conn_cache('push',localfilename,CONN_x.pobj.cache);
+                        conn_server('run','conn','load',conn_server('util_localfile',localfilename),false,true);
+                    end
                 catch
                     error(['Failed to save file ',localfilename,'. Check file name and/or folder permissions']);
                 end
                 conn_disp('fprintf','saved %s\n',localfilename);
                 CONN_x.isready(1)=1;
-                if ~saveas&&CONN_x.pobj.holdsdata,
+                if ~saveas&&CONN_x.pobj.holdsdata&&~(isfield(CONN_x.pobj,'cache')&&~isempty(CONN_x.pobj.cache)),
                     try
                         conn_projectmanager cleanproject;
                     catch
@@ -943,29 +1020,29 @@ else
                 if ~saveas
                     if isfield(CONN_x,'Analyses')
                         for ianalysis=1:numel(CONN_x.Analyses)
-                            if isfield(CONN_x.Analyses(ianalysis),'name')&&isfield(CONN_x.Analyses(ianalysis),'sourcenames')&&exist(fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(ianalysis).name),'dir') 
+                            if isfield(CONN_x.Analyses(ianalysis),'name')&&isfield(CONN_x.Analyses(ianalysis),'sourcenames')&&conn_existfile(fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(ianalysis).name),2) 
                                 filesourcenames=fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(ianalysis).name,'_list_sources.mat');
                                 filesourcenames=conn_projectmanager('projectfile',filesourcenames,CONN_x.pobj,'.mat');
                                 sourcenames=CONN_x.Analyses(ianalysis).sourcenames;
-                                save(filesourcenames,'sourcenames');
+                                conn_savematfile(filesourcenames,'sourcenames');
                             end
                         end
                     end
                     if isfield(CONN_x,'vvAnalyses')
                         for ianalysis=1:numel(CONN_x.vvAnalyses)
-                            if isfield(CONN_x.vvAnalyses(ianalysis),'name')&&isfield(CONN_x.vvAnalyses(ianalysis),'measurenames')&&exist(fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(ianalysis).name),'dir')
+                            if isfield(CONN_x.vvAnalyses(ianalysis),'name')&&isfield(CONN_x.vvAnalyses(ianalysis),'measurenames')&&conn_existfile(fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(ianalysis).name),2)
                                 filemeasurenames=fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(ianalysis).name,'_list_measures.mat');
                                 filemeasurenames=conn_projectmanager('projectfile',filemeasurenames,CONN_x.pobj,'.mat');
                                 measurenames=CONN_x.vvAnalyses(ianalysis).measurenames;
-                                save(filemeasurenames,'measurenames');
+                                conn_savematfile(filemeasurenames,'measurenames');
                             end
                         end
                     end
-                    if isfield(CONN_x.Setup.conditions,'allnames')
+                    if isfield(CONN_x.Setup.conditions,'allnames')&&conn_existfile(CONN_x.folders.preprocessing,2)
                         fileconditionnames=fullfile(CONN_x.folders.preprocessing,'_list_conditions.mat');
                         fileconditionnames=conn_projectmanager('projectfile',fileconditionnames,CONN_x.pobj,'.mat');
                         allnames=CONN_x.Setup.conditions.allnames;
-                        save(fileconditionnames,'allnames');
+                        conn_savematfile(fileconditionnames,'allnames');
                     end
                 end
             end
@@ -1020,14 +1097,16 @@ else
             conn gui_setup;
             
         case 'gui_recent_init'
-            if ispc, filename=conn_fullfile(getenv('USERPROFILE'),'conn_recentfiles.dat');
-            else filename=conn_fullfile('~/conn_recentfiles.dat');
-            end
+            filename=fullfile(conn_projectmanager('homedir'),'conn_recentfiles.dat');
+            %if ispc, filename=conn_fullfile(getenv('USERPROFILE'),'conn_recentfiles.dat');
+            %else filename=conn_fullfile('~/conn_recentfiles.dat');
+            %end
             CONN_gui.recentfiles={};
             if conn_existfile(filename),
                 try,
-                    load(filename,'recentfiles','-mat');
-                    CONN_gui.recentfiles=recentfiles;
+                    conn_loadmatfile(filename,'recentfiles','-mat');
+                    [nill,idx]=unique(recentfiles);
+                    CONN_gui.recentfiles=recentfiles(sort(idx));
                 catch, 
                     conn_disp('fprintf','warning: file %s could not be loaded. Please check file permissions and try again\n',filename);
                 end
@@ -1042,10 +1121,10 @@ else
             tdescr(ok)=cellfun(@(a,b)sprintf('%s (%s)',a,b),tname,tpath,'uni',0);
             conn_menumanager(CONN_h.menus.m_setup_01c,'string',tdescr);
         case 'gui_recent_set'
-            nrecent=find(strcmp(CONN_x.filename,CONN_gui.recentfiles),1);
+            nrecent=find(strcmp(conn_server('util_localfile',CONN_x.filename),CONN_gui.recentfiles),1);
             if isempty(nrecent), nrecent=find(cellfun('length',CONN_gui.recentfiles)==0,1); end
             if isempty(nrecent), nrecent=numel(CONN_gui.recentfiles); end
-            CONN_gui.recentfiles{nrecent}=CONN_x.filename;
+            CONN_gui.recentfiles{nrecent}=conn_server('util_localfile',CONN_x.filename);
             CONN_gui.recentfiles=CONN_gui.recentfiles([nrecent, 1:nrecent-1, nrecent+1:numel(CONN_gui.recentfiles)]);
             ok=cellfun('length',CONN_gui.recentfiles)>0;
             tdescr=repmat({''},1,numel(CONN_gui.recentfiles));
@@ -1054,16 +1133,18 @@ else
             tdescr(ok)=cellfun(@(a,b)sprintf('%s (%s)',a,b),tname,tpath,'uni',0);
             conn_menumanager(CONN_h.menus.m_setup_01c,'string',tdescr);
             try
-                if ispc, filename=conn_fullfile(getenv('USERPROFILE'),'conn_recentfiles.dat');
-                else filename=conn_fullfile('~/conn_recentfiles.dat');
-                end
+                filename=fullfile(conn_projectmanager('homedir'),'conn_recentfiles.dat');
+                %if ispc, filename=conn_fullfile(getenv('USERPROFILE'),'conn_recentfiles.dat');
+                %else filename=conn_fullfile('~/conn_recentfiles.dat');
+                %end
                 recentfiles=CONN_gui.recentfiles;
-                save(filename,'recentfiles','-mat');
+                conn_savematfile(filename,'recentfiles','-mat');
             catch, conn_disp('fprintf','warning: file %s could not be saved. Please check file permissions and try again\n',filename);
             end
         case 'gui_recent_load'
             nrecent=varargin{2};
             filename=CONN_gui.recentfiles{nrecent};
+            if CONN_gui.isremote, filename=conn_server('util_remotefile',filename); end
             if ~isempty(filename)
                 if ~conn_existfile(filename)
                     conn_msgbox({sprintf('File %s cannot be found',filename),'Please check whether the project may have been moved to a different location'},'',2);
@@ -1230,7 +1311,7 @@ else
             
         case 'gui_workshop',
             place='Boston MGH/HST';
-            dates={'April 27 2020','May 1 2020','April 27 - May 1 2020'};
+            dates={'April 16 2021','May 14 2021','April 16 - May 14 2021 (5 weeks, one day per week)'};
             passed=false;
             try, dates(1:2)=cellfun(@datenum,dates(1:2),'uni',0); end
             if now>=dates{1}
@@ -1248,6 +1329,17 @@ else
             end
             if isequal(answ,'Visit')
                 conn('gui_help','url',['http://',url]);
+            end
+            
+        case 'gui_clear'
+            conn_menumanager clf;
+            conn_menuframe;
+            tstate=conn_menumanager(CONN_h.menus.m0,'state'); tstate(:)=0;conn_menumanager(CONN_h.menus.m0,'state',tstate);
+            conn_menu('frame2border',[.0,.955,1,.045],'');
+            conn_menumanager(CONN_h.menus.m0,'enable',CONN_x.isready);
+            conn_menumanager([CONN_h.menus.m_setup_06,CONN_h.menus.m0],'on',1);
+            if CONN_x.ispending, conn_menumanager(CONN_h.menus.m_setup_08,'on',1);
+            elseif CONN_gui.newversionavailable, conn_menumanager(CONN_h.menus.m_setup_08b,'on',1);
             end
             
         case 'gui_settings',
@@ -1271,7 +1363,7 @@ else
 %               uimenu(hc1,'label','Remove GUI background image','callback','conn_guibackground clear'); 
 %               set(dlg.m4,'uicontextmenu',hc1);
             uicontrol('style','popupmenu','units','norm','position',[.1,.775,.45,.075],'backgroundcolor','w','foregroundcolor','k','horizontalalignment','left','string',{'<HTML><i>Select GUI background color/image</i></HTML>','Light text on dark background theme','Dark text on light background theme','Random background image','Screenshot background image','User-defined background image'},'userdata',[dlg.m4 dlg.m4A],'callback',...
-                'h=get(gcbo,''userdata''); switch(get(gcbo,''value'')), case 1, conn_guibackground clear; color=uisetcolor; if numel(color)==3, set(h(1),''backgroundcolor'',color); colorA=color;set(h(2),''backgroundcolor'',colorA); end; case 2, conn_guibackground clear; color=.14*[1 1.05 1.10]; set(h(1),''backgroundcolor'',color); colorA=.19*[1 1.05 1.10];set(h(2),''backgroundcolor'',colorA); case 3, conn_guibackground clear; color=.9*[1 1 1]; set(h(1),''backgroundcolor'',color); colorA=.95*[1 1 1];set(h(2),''backgroundcolor'',colorA); case 4, answ=conn_guibackground(''setfiledefault''); case 5, answ=conn_guibackground(''cleartrans''); case 6, answ=conn_guibackground(''setfile''); end; set(gcbf,''userdata'',1); uiresume(gcbf);',...
+                'h=get(gcbo,''userdata''); switch(get(gcbo,''value'')), case 1, conn_guibackground clear; color=uisetcolor; if numel(color)==3, set(h(1),''backgroundcolor'',color); colorA=color;set(h(2),''backgroundcolor'',colorA); end; case 2, conn_guibackground clear; color=.10*[1 1.05 1.10]; set(h(1),''backgroundcolor'',color); colorA=.15*[1 1.05 1.10];set(h(2),''backgroundcolor'',colorA); case 3, conn_guibackground clear; color=.9*[1 1 1]; set(h(1),''backgroundcolor'',color); colorA=.95*[1 1 1];set(h(2),''backgroundcolor'',colorA); case 4, answ=conn_guibackground(''setfiledefault''); case 5, answ=conn_guibackground(''cleartrans''); case 6, answ=conn_guibackground(''setfile''); end; set(gcbf,''userdata'',1); uiresume(gcbf);',...
                 'tooltipstring','Changes the default theme colors in the CONN toolbox GUI','parent',dlg.fig);
             uicontrol('style','frame','unit','norm','position',[.05,.15,.9,.25],'backgroundcolor','w','foregroundcolor',[.5 .5 .5],'parent',dlg.fig);
             %uicontrol('style','text','unit','norm','position',[.07,.91,.3,.08],'string','Appearance','backgroundcolor','w','foregroundcolor',[.5 .5 .5]);
@@ -1286,7 +1378,7 @@ else
             while 1
                 if numel(varargin)>1&&ischar(varargin{2})
                     switch(lower(varargin{2}))
-                        case 'dark', hmsg=conn_msgbox('Setting dark-mode color theme... please wait','',-1); conn_guibackground clear; color=.14*[1 1.05 1.10]; set(dlg.m4,'backgroundcolor',color); colorA=.19*[1 1.05 1.10]; set(dlg.m4A,'backgroundcolor',colorA);
+                        case 'dark', hmsg=conn_msgbox('Setting dark-mode color theme... please wait','',-1); conn_guibackground clear; color=.10*[1 1.05 1.10]; set(dlg.m4,'backgroundcolor',color); colorA=.15*[1 1.05 1.10]; set(dlg.m4A,'backgroundcolor',colorA);
                         case 'color', hmsg=conn_msgbox('Setting color theme... please wait','',-1); conn_guibackground clear; if 1, color=.1*rand(1,3); colorA=.19/.14*color; else color=.85+.15*rand(1,3); colorA=color+.25*(1-color); end; set(dlg.m4,'backgroundcolor',color); set(dlg.m4A,'backgroundcolor',colorA); CONN_gui.backgroundcolor=color; CONN_gui.backgroundcolorA=colorA; conn_guibackground setfilecolor;
                         case 'light', hmsg=conn_msgbox('Setting light-mode color theme... please wait','',-1); conn_guibackground clear; color=.9*[1 1 1]; set(dlg.m4,'backgroundcolor',color); colorA=.95*[1 1 1]; set(dlg.m4A,'backgroundcolor',colorA);
                         case 'font+', hmsg=conn_msgbox('Increasing fontsize... please wait','',-1); fontsize=str2num(get(dlg.m1,'string')); fontsize=fontsize+1; if numel(fontsize)==1, set(dlg.m1 ,'string',num2str(fontsize)); end
@@ -1339,7 +1431,7 @@ else
                 conn_disp;
                 filename=get(dlg.m2,'tooltipstring');
                 if ~strcmp(filename,CONN_gui.refs.canonical.filename)
-                    if isempty(dir(filename))
+                    if ~conn_existfile(filename)
                         filename=spm_select(1,'\.img$|\.nii$',['Select background anatomical image'],{CONN_gui.refs.canonical.filename},fileparts(CONN_gui.refs.canonical.filename));
                     end
                     if ~isempty(filename),
@@ -1352,10 +1444,10 @@ else
                 end
                 filename=get(dlg.m3,'tooltipstring');
                 if ~strcmp(filename,CONN_gui.refs.rois.filename)
-                    if isempty(dir(filename))
+                    if ~conn_existfile(filename)
                         filename=spm_select(1,'image',['Select background reference atlas'],{CONN_gui.refs.rois.filename},fileparts(CONN_gui.refs.rois.filename));
                     end
-                    if ~isempty(dir(filename))
+                    if conn_existfile(filename)
                         [filename_path,filename_name,filename_ext]=fileparts(filename);
                         V=spm_vol(filename);
                         [idxlabels,strlabels]=rex(filename,filename,'level','clusters','disregard_zeros',false); strlabels=regexprep(strlabels,['^',filename_name,'\.'],'');
@@ -1416,6 +1508,36 @@ else
                 end
             end
             
+        case 'gui_server',
+            info=conn_server('HPC_info');
+            if isfield(info,'host')&&~isempty(info.host), tnameserver=info.host;
+            else tnameserver='none';
+            end
+            thfig=figure('units','norm','position',[.3,.4,.5,.3],'menubar','none','numbertitle','off','name','CONN remotely','color','w');
+            str={}; 
+            try, str{end+1}=sprintf('Remote session host address: %s',info.remote_ip); end
+            try, str{end+1}=sprintf('Remote session access port: %d',info.remote_port); end
+            try, str{end+1}=sprintf('Remote session id: %s',info.remote_id); end
+            try, str{end+1}=sprintf('Remote session log folder: %s',info.remote_log); end
+            try, str{end+1}=sprintf('SSH tunnel local port: %d',info.local_port); end
+            try, 
+                if isempty(info.filename_ctrl)||exist(info.filename_ctrl,'file'), str{end+1}=sprintf('SSH control socket: %s',info.filename_ctrl); 
+                else str{end+1}=sprintf('WARNING: SSH control socket missing, please restart connection');
+                end
+            end
+            h.text1=uicontrol('style','text','units','norm','position',[.05,.80,.9,.10],'backgroundcolor','w','foregroundcolor','k','horizontalalignment','left','fontsize',9+CONN_gui.font_offset,'string',sprintf('Remote CONN session in: %s',tnameserver),'parent',thfig);
+            h.text2=uicontrol('style','text','units','norm','position',[.05,.35,.9,.40],'backgroundcolor','w','foregroundcolor','k','horizontalalignment','left','fontsize',6+CONN_gui.font_offset,'string',str,'parent',thfig);
+            h.text3=uicontrol('style','text','units','norm','position',[.05,.23,.9,.10],'backgroundcolor','w','foregroundcolor','k','horizontalalignment','left','fontsize',6+CONN_gui.font_offset,'string','','parent',thfig);
+            h.button1=uicontrol(thfig,'style','pushbutton','string','ping','enable','off','units','norm','position',[.05,.11,.30,.10],'callback','h=get(gcbf,''userdata''); set(h.text3,''string'',conn_server(''ping''));','fontsize',6+CONN_gui.font_offset,'tooltipstring','send ping signal to remote CONN and track round-trip time');
+            h.button2=uicontrol(thfig,'style','pushbutton','string','display log','enable','off','units','norm','position',[.35,.11,.30,.10],'callback','conn_server(''HPC_details'')','fontsize',6+CONN_gui.font_offset,'tooltipstring','display internal log file of remote CONN session');
+            h.button3=uicontrol(thfig,'style','pushbutton','string','clear cache','units','norm','position',[.65,.11,.30,.10],'callback','conn_server(''clear'')','fontsize',6+CONN_gui.font_offset,'tooltipstring','clears file temporal storage and communication buffer');
+            h.button4=uicontrol(thfig,'style','pushbutton','string','File transfer','units','norm','position',[.35,.01,.30,.10],'callback','conn_server(''HPC_filetransfer'')','fontsize',6+CONN_gui.font_offset,'tooltipstring','file transfer from/to this computer to/from remote CONN session');
+            h.button5=uicontrol(thfig,'style','pushbutton','string','Restart connection','units','norm','position',[.35,.01,.30,.10],'callback','close(gcbf); conn remotely restart','fontsize',6+CONN_gui.font_offset,'tooltipstring','re-establish the connection to an existing/running remote CONN session');
+            h.button6=uicontrol(thfig,'style','pushbutton','string','Start new session','units','norm','position',[.65,.01,.30,.10],'callback','close(gcbf); conn remotely start','fontsize',6+CONN_gui.font_offset,'tooltipstring','<HTML>start a new remote CONN session and connect to it <br/> - note: if the current remote CONN session is unresponsive, you may run "conn_server hpc_exitforce" to make sure it is terminated <br/> before starting a new one (as remote CONN sessions are otherwise only terminated when you exit the CONN gui locally)</HTML>');
+            try, if ~isempty(info.remote_ip), set(h.button1,'enable','on'); end; end
+            try, if ~isempty(info.remote_log), set(h.button2,'enable','on'); end; end
+            set(thfig,'userdata',h);
+            
         case 'parallel_settings'
             conn_jobmanager('settings');
             
@@ -1451,7 +1573,7 @@ else
             
         case 'bugfix_catalina2019'
             str=fileparts(which('spm'))
-            [ok,msg]=system(sprintf('find "%s" -name "*.mexmaci64" -exec xattr -d com.apple.quarantine {} \;',str));
+            [ok,msg]=system(['find "',str,'" -name "*.mexmaci64" -exec xattr -d com.apple.quarantine {} \;']);
 
         case 'plog'
             if nargin>1&&~isempty(varargin{2}), n=varargin{2};
@@ -1513,9 +1635,14 @@ else
                     alloption=cellfun(@(x)[{CONN_x.gui},x],CONN_x.gui.processes{2},'uni',0);
                     conn_jobmanager('submit',allpsteps,subjects,[],alloption);
                 else
+                    arglist={};
                     for n=1:numel(CONN_x.gui.processes{1}),
-                        conn_process(psteps{CONN_x.gui.processes{1}(n)},CONN_x.gui.processes{2}{n}{:}); 
+                       arglist{n}={psteps{CONN_x.gui.processes{1}(n)},CONN_x.gui.processes{2}{n}{:}}; 
                     end
+                    conn_process('multiplesteps',arglist);
+                    %for n=1:numel(CONN_x.gui.processes{1}),
+                    %    conn_process(psteps{CONN_x.gui.processes{1}(n)},CONN_x.gui.processes{2}{n}{:}); 
+                    %end
                 end
                 CONN_x.gui=1;
                 conn gui_setup_save;
@@ -1635,9 +1762,9 @@ else
                         %tmp=conn_menu('popupblue',boffset+[.56,.77,.129,.04],'',{'(dataset 0)'},'Primary functional dataset','');
 						CONN_h.menus.m_setup_00{1}=conn_menu('listbox',boffset+[.200,.30,.075,.33],'Subjects','','Select subject(s)','conn(''gui_setup'',1);');
 						CONN_h.menus.m_setup_00{2}=conn_menu('listbox',boffset+[.275,.30,.075,.33],'Sessions','','Select session','conn(''gui_setup'',2);');
-						CONN_h.menus.m_setup_00{3}=conn_menu('filesearchlocal',[],'Select functional data files','*.img; *.nii; *.gz; *-1.dcm','',{@conn,'gui_setup',3},'conn(''gui_setup'',4);');
+						CONN_h.menus.m_setup_00{3}=conn_menu('filesearchlocal',[],'Select functional data files','*.img; *.nii; *.gii; *.gz; *-1.dcm','',{@conn,'gui_setup',3},'conn(''gui_setup'',4);');
 						CONN_h.menus.m_setup_00{4}=conn_menu('pushbutton',boffset+[.36,.60,.26,.09],'','','','conn(''gui_setup'',4);');
-						CONN_h.menus.m_setup_00{5}=conn_menu('image',boffset+[.36,.35,.26,.25],'','','',[],@conn_callbackdisplay_functionalclick);
+						CONN_h.menus.m_setup_00{5}=conn_menu('image',boffset+[.40,.35,.22,.25],'','','',[],@conn_callbackdisplay_functionalclick);
                         conn_menu('nullstr',' ');
 						CONN_h.menus.m_setup_00{8}=conn_menu('image',boffset+[.43,.24,.16,.05],'voxel BOLD timeseries');
                         %set([CONN_h.menus.m_setup_00{4}],'visible','off'); conn_menumanager('onregion',[CONN_h.menus.m_setup_00{4}],1,boffset+[.35,.25,.34,.55]);
@@ -1646,9 +1773,9 @@ else
                         %ht=uicontrol('style','frame','units','norm','position',[.78,.06,.20,.84],'foregroundcolor',CONN_gui.backgroundcolor,'backgroundcolor',CONN_gui.backgroundcolor);
                         %set(ht,'visible','on'); conn_menumanager('onregion',ht,-1,boffset+[.19,0,.81,1]);
 						%CONN_h.menus.m_setup_00{12}=conn_menu('image',boffset+[.39,.26,.25,.05],'Experiment data  (scans/sessions)','','',@conn_callbackdisplay_conditiondesign);
-                        CONN_h.menus.m_setup_00{12}=conn_menu('image',boffset+[.39,.34,.20,.01],'','','',@conn_callbackdisplay_conditiondesign);
+                        CONN_h.menus.m_setup_00{12}=conn_menu('image',boffset+[.41,.34,.20,.01],'','','',@conn_callbackdisplay_conditiondesign);
                         %conn_menu('nullstr',{'No functional','data selected'});
-                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.20,.25,.05],'',{'<HTML><i> - functional tools:</i></HTML>','Display slice viewer','Display slice viewer with anatomical overlay (QA_REG)','Display slice viewer with MNI boundaries (QA_NORM)','Display functional/anatomical coregistration (SPM)','Display functional/MNI coregistration (SPM)','Display single-slice for all subjects (montage)','Display single-slice for all timepoints (movie)', 'Apply individual preprocessing step','Reassign all functional files simultaneously'},'<HTML> - <i>slice viewer</i> displays functional dataset slices<br/> - <i>slice viewer with anatomical overlay</i>displays mean functional overlaid with same-subject structural volume<br/> - <i>slice viewer with MNI boundaries</i> displays mean functional volume slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/> - <i>display registration</i> checks the coregistration of the selected subject functional/anatomical files <br/> - <i>preprocessing</i> runs individual preprocessing step on functional volumes (e.g. realignment, slice-timing correction, etc.)<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space)<br/> - <i>reassign all functional files simultaneously</i> reassigns current dataset functional volumes using a user-generated search/replace filename rule</HTML>','conn(''gui_setup'',14);');
+                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.19,.25,.05],'',{'<HTML><i> - functional tools -</i></HTML>','Display slice viewer','Display slice viewer with anatomical overlay (QA_REG)','Display slice viewer with MNI boundaries (QA_NORM)','Display functional/anatomical coregistration (SPM)','Display functional/MNI coregistration (SPM)','Display single-slice for all subjects (montage)','Display single-slice for all timepoints (movie)', 'Apply individual preprocessing step','Reassign all functional files simultaneously'},'<HTML> - <i>slice viewer</i> displays functional dataset slices<br/> - <i>slice viewer with anatomical overlay</i>displays mean functional overlaid with same-subject structural volume<br/> - <i>slice viewer with MNI boundaries</i> displays mean functional volume slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/> - <i>display registration</i> checks the coregistration of the selected subject functional/anatomical files <br/> - <i>preprocessing</i> runs individual preprocessing step on functional volumes (e.g. realignment, slice-timing correction, etc.)<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space)<br/> - <i>reassign all functional files simultaneously</i> reassigns current dataset functional volumes using a user-generated search/replace filename rule</HTML>','conn(''gui_setup'',14);');
                         nset=1;
                         newdelete={'<HTML><i>new</i></HTML>','<HTML><i>move</i></HTML>','<HTML><i>label</i></HTML>','<HTML><i>delete</i></HTML>'}; if numel(CONN_x.Setup.secondarydataset)==1, newdelete=newdelete(1:3); end
                         CONN_h.menus.m_setup_00{7}=conn_menu('popupbigblue',boffset+[.190,.74,.45,.05],'',[{'primary dataset'},arrayfun(@(n)sprintf('secondary dataset #%d %s',n,regexprep(CONN_x.Setup.secondarydataset(n).label,'(.+)','($1)')),1:numel(CONN_x.Setup.secondarydataset),'uni',0),newdelete],'<HTML>Manage multiple versions of your functional data<br/> - select the dataset that you wish to edit, or new/move/label/delete to manage the current list of datasets<br/><br/>The <b>Primary dataset</b> is used to compute voxel- or vertex- level BOLD timeseries, while either Primary or <b>Secondary datasets</b> may be selected to compute ROI-level <br/>BOLD timeseres (see <i>Setup.ROIs</i> tab). Other secondary datasets that are not explicitly selected by any ROI will be simply disregarded by CONN''s Setup/Denoising/Analysis pipeline<br/> <br/> additional information: <br/>Always enter your main/primary functional data as <i><b>primary dataset</b></i><br/>Secondary datasets (<i>secondary dataset #1</i> and above) may be defined as a way of keeping track of (and easily switching between) alternative versions of your functional <br/>data (e.g. an original dataset before all preprocessing steps, and a fully preprocessed smoothed MNI-space dataset). Secondary datasets may also be used, in conjunction <br/>with dataset-specific ROIs, as a way of using in the same CONN project different types of ROIs (e.g. subject-space ROIs and MNI-space ROIs)<br/><br/>Example1 (MNI-space analyses): <i>Primary dataset</i>: MNI-space spatially-smoothed data; <i>Secondary dataset #1</i>: MNI-space raw (non-smoothed) data<br/> Example2 (surface-based analyses): <i>Primary dataset</i>: subject-space raw data; <i>Secondary dataset #1</i>: MNI-space raw (non-smoothed) data (to be used with MNI-space ROIs)</HTML>','conn(''gui_setup'',7);');
@@ -1681,7 +1808,7 @@ else
                                 nsessall=get(CONN_h.menus.m_setup_00{2},'value'); 
                                 nsessmax=CONN_x.Setup.nsessions(min(length(CONN_x.Setup.nsessions),nsubs));
                                 nfields=sum(sum(conn_bsxfun(@le,nsessall(:),nsessmax(:)')));
-								filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
+								filename=fliplr(deblank(fliplr(deblank(char(varargin{3})))));
                                 txt=''; bak1=CONN_x.Setup.functional;bak2=CONN_x.Setup.nscans;
                                 localcopy=isequal(get(CONN_h.menus.m_setup_00{3}.localcopy,'value'),2);
                                 if ~nset, bidsname='func';
@@ -1878,7 +2005,7 @@ else
                                         if val==5, files={};filenames={};
                                         else
                                             functional_template=fullfile(fileparts(which('spm')),'templates','EPI.nii');
-                                            if isempty(dir(functional_template)), functional_template=fullfile(fileparts(which('spm')),'toolbox','OldNorm','EPI.nii'); end
+                                            if ~conn_existfile(functional_template), functional_template=fullfile(fileparts(which('spm')),'toolbox','OldNorm','EPI.nii'); end
                                             files={spm_vol(functional_template)}; filenames={functional_template};
                                         end
                                         nsets=get(CONN_h.menus.m_setup_00{7},'value')-1;
@@ -1901,7 +2028,7 @@ else
                                                         if numel(temp)==1,
                                                             temp=cellstr(conn_expandframe(temp{1}));
                                                         end
-                                                        files{end+1}=spm_vol(temp{1});
+                                                        files{end+1}=conn_fileutils('spm_localvol',temp{1});
                                                         filenames{end+1}=temp{1};
                                                     end
                                                 end
@@ -1950,7 +2077,7 @@ else
                                                         end
                                                         nvols=unique([1 numel(temp)]);
                                                         for nvol=nvols(:)'
-                                                            files=spm_vol(temp{nvol});
+                                                            files=conn_fileutils('spm_vol',temp{nvol});
                                                             if conn_surf_dimscheck(files), files=conn_surf_parent(files); end % surface
                                                             if numel(txyz)<=1
                                                                 dim=files(1).dim(1:2);
@@ -1960,7 +2087,7 @@ else
                                                                 end
                                                                 txyz=files(1).mat*[tx(:) ty(:) zslice+zeros(numel(tx),1) ones(numel(tx),1)]';
                                                             end
-                                                            dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(1),pinv(files(1).mat)*txyz),dim(1:2))'));
+                                                            dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(1),pinv(files(1).mat)*txyz),dim(1:2))'));
                                                             displabel{end+1}=sprintf('Subject %d session %d volume %d dataset %d',nsub,nses,nvol,nset);
                                                         end
                                                     end
@@ -2011,7 +2138,7 @@ else
                                                         dispdata{end+1}=nan(dim([2 1]));
                                                         displabel{end+1}=sprintf('Subject %d session %d',nsub,nses);
                                                     else
-                                                        files=spm_vol(Vsource);
+                                                        files=conn_fileutils('spm_vol',Vsource);
                                                         if conn_surf_dimscheck(files), files=conn_surf_parent(files); end % surface
                                                         for nvol=1:numel(files)
                                                             if numel(txyz)<=1
@@ -2022,7 +2149,8 @@ else
                                                                 end
                                                                 txyz=files(1).mat*[tx(:) ty(:) zslice+zeros(numel(tx),1) ones(numel(tx),1)]';
                                                             end
-                                                            dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(nvol),pinv(files(nvol).mat)*txyz),dim(1:2))'));
+                                                            dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(nvol),pinv(files(1).mat)*txyz),dim(1:2))')); % resamples at same volume coordinates for all timepoints
+                                                            %dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(nvol),pinv(files(nvol).mat)*txyz),dim(1:2))'));
                                                             displabel{end+1}=sprintf('Subject %d session %d volume %d dataset %d',nsub,nses,nvol,nset);
                                                         end
                                                     end
@@ -2182,7 +2310,7 @@ else
                         %ht=uicontrol('style','frame','units','norm','position',[.78,.06,.20,.84],'foregroundcolor',CONN_gui.backgroundcolor,'backgroundcolor',CONN_gui.backgroundcolor);
                         %set(ht,'visible','on'); conn_menumanager('onregion',ht,-1,boffset+[.19,0,.81,1]);
                         %CONN_h.menus.m_setup_00{6}=uicontrol('style','popupmenu','units','norm','position',boffset+[.31,.20,.13,.04],'string',{'Structural volume','Structural surface'},'value',2,'backgroundcolor',CONN_gui.backgroundcolorA,'foregroundcolor','w','fontsize',8+CONN_gui.font_offset,'callback','conn(''gui_setup'',6);','tooltipstring','select display view (surface view only available for freesurfer-generated files)');
-                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.15,.25,.05],'',{'<HTML><i> - structural tools:</i></HTML>','Display slice viewer','Display slice viewer with MNI boundaries (QA_NORM)','Display anatomical/MNI coregistration (SPM)','Display single-slice for all subjects (montage)','Apply individual preprocessing step','Reassign all structural files simultaneously'},'<HTML> - <i>slice viewer</i> displays strucutral volume slices <br/> - <i>slice viewer with MNI boundaries</i> displays strucutral volume slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/> - <i>display registration</i> checks the coregistration between the selected subject anatomical files and an MNI T1 template<br/> - <i>preprocessing</i> runs individual preprocessing step on structural volumes (e.g. normalization, segmentation, etc.)<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space)<br/> - <i>reassign all structural files simultaneously</i> reassigns structural volumes using a user-generated search/replace filename rule</HTML>','conn(''gui_setup'',14);');
+                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.15,.25,.05],'',{'<HTML><i> - structural tools -</i></HTML>','Display slice viewer','Display slice viewer with MNI boundaries (QA_NORM)','Display anatomical/MNI coregistration (SPM)','Display single-slice for all subjects (montage)','Apply individual preprocessing step','Reassign all structural files simultaneously'},'<HTML> - <i>slice viewer</i> displays strucutral volume slices <br/> - <i>slice viewer with MNI boundaries</i> displays strucutral volume slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/> - <i>display registration</i> checks the coregistration between the selected subject anatomical files and an MNI T1 template<br/> - <i>preprocessing</i> runs individual preprocessing step on structural volumes (e.g. normalization, segmentation, etc.)<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space)<br/> - <i>reassign all structural files simultaneously</i> reassigns structural volumes using a user-generated search/replace filename rule</HTML>','conn(''gui_setup'',14);');
                         %CONN_h.menus.m_setup_00{14}=uicontrol('style','popupmenu','units','norm','position',boffset+[.31,.15,.13,.04],'string',{'<HTML><i> - options:</i></HTML>','preprocessing steps'},'fontsize',8+CONN_gui.font_offset,'foregroundcolor','w','backgroundcolor',CONN_gui.backgroundcolorA,'callback','conn(''gui_setup'',14);','tooltipstring','Structural volumes additional options');
 						%CONN_h.menus.m_setup_00{11}=conn_menu('checkbox',[.31,.205,.02,.04],'spatially-normalized images','','','conn(''gui_setup'',11);');
 						set(CONN_h.menus.m_setup_00{1},'string',[repmat('Subject ',[CONN_x.Setup.nsubjects,1]),num2str((1:CONN_x.Setup.nsubjects)')],'max',2);
@@ -2210,7 +2338,7 @@ else
                                 nsessall=get(CONN_h.menus.m_setup_00{2},'value'); 
                                 nsessmax=CONN_x.Setup.nsessions(min(length(CONN_x.Setup.nsessions),nsubs));
                                 if ~CONN_x.Setup.structural_sessionspecific, nsessall=1:max(nsessmax); end
-								filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
+                                filename=fliplr(deblank(fliplr(deblank(char(varargin{3})))));
                                 nfields=sum(sum(conn_bsxfun(@le,nsessall(:),nsessmax(:)')));
                                 txt=''; bak1=CONN_x.Setup.rois.files;bak2=CONN_x.Setup.structural;
                                 localcopy=isequal(get(CONN_h.menus.m_setup_00{3}.localcopy,'value'),2);
@@ -2404,14 +2532,14 @@ else
                                         sessionspecific=CONN_x.Setup.structural_sessionspecific;
                                         if ~sessionspecific, nsess=1; end
                                         structural_template=fullfile(fileparts(which('spm')),'templates','T1.nii');
-                                        if isempty(dir(structural_template)), structural_template=fullfile(fileparts(which('spm')),'toolbox','OldNorm','T1.nii'); end
+                                        if ~conn_existfile(structural_template), structural_template=fullfile(fileparts(which('spm')),'toolbox','OldNorm','T1.nii'); end
                                         files={spm_vol(structural_template)};filenames={structural_template};
                                         for n1=1:numel(nsubs)
                                             nsub=nsubs(n1);
                                             nsesst=intersect(nsess,1:CONN_x.Setup.nsessions(min(length(CONN_x.Setup.nsessions),nsub)));
                                             for n2=1:length(nsesst)
                                                 nses=nsesst(n2);
-                                                files{end+1}=CONN_x.Setup.structural{nsub}{nses}{3}(1);
+                                                files{end+1}=conn_fileutils('spm_localvol',CONN_x.Setup.structural{nsub}{nses}{3}(1));
                                                 filenames{end+1}=CONN_x.Setup.structural{nsub}{nses}{1};
                                             end
                                         end
@@ -2436,9 +2564,9 @@ else
                                                     conn_disp('fprintf','Subject %d session %d data not found\n',nsub,nses);
                                                     dispdata{end+1}=nan(data.buttondown.matdim.dim([2 1]));
                                                 else
-                                                    files=spm_vol(Vsource);
+                                                    files=conn_fileutils('spm_vol',Vsource);
                                                     if conn_surf_dimscheck(files), files=conn_surf_parent(files); end % surface
-                                                    dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(1),pinv(files(1).mat)*txyz),data.buttondown.matdim.dim(1:2))'));
+                                                    dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(1),pinv(files(1).mat)*txyz),data.buttondown.matdim.dim(1:2))'));
                                                 end
                                                 if ~sessionspecific, displabel{end+1}=sprintf('Subject %d',nsub);
                                                 else displabel{end+1}=sprintf('Subject %d session %d',nsub,nses);
@@ -2528,7 +2656,7 @@ else
 						CONN_h.menus.m_setup_00{1}=conn_menu('listbox',boffset+[.140,.13,.075,.46],'ROIs','',['<HTML>Select ROI <br/> - click after the last item to add a new ROI <br/> - ',CONN_gui.rightclick,'-click for additional options<br/></HTML>'],'conn(''gui_setup'',1);','conn(''gui_setup'',8);');
 						[CONN_h.menus.m_setup_00{2},CONN_h.menus.m_setup_00{19}]=conn_menu('listbox',boffset+[.215,.13,.075,.46],'Subjects','','Select subject(s)','conn(''gui_setup'',2);');
 						[CONN_h.menus.m_setup_00{16},CONN_h.menus.m_setup_00{15}]=conn_menu('listbox',boffset+[.29,.13,.075,.46],'Sessions','','Select session','conn(''gui_setup'',16);');
-						CONN_h.menus.m_setup_00{3}=conn_menu('filesearch',[],'Select ROI definition files','*.img; *.nii; *.tal; *.mgh; *.mgz; *.annot; *.gz; *-1.dcm','',{@conn,'gui_setup',3},'conn(''gui_setup'',4);');
+						CONN_h.menus.m_setup_00{3}=conn_menu('filesearch',[],'Select ROI definition files','*.img; *.nii; *.gii; *.tal; *.mgh; *.mgz; *.annot; *.gz; *-1.dcm','',{@conn,'gui_setup',3},'conn(''gui_setup'',4);');
 						CONN_h.menus.m_setup_00{4}=conn_menu('pushbutton', boffset+[.39,.47,.25,.08],'','','','conn(''gui_setup'',4);');
                         CONN_h.menus.general.names={};CONN_h.menus.general.names2={};
 						CONN_h.menus.m_setup_00{5}=conn_menu('image',boffset+[.37,.19,.29,.28],'','','',@conn_callbackdisplay_general,@conn_callbackdisplay_roiclick); 
@@ -2543,7 +2671,7 @@ else
                         str=[{'from primary functional dataset'},arrayfun(@(n)sprintf('from secondary dataset #%d %s',n,regexprep(CONN_x.Setup.secondarydataset(n).label,'(.+)','($1)')),1:max(numel(CONN_x.Setup.secondarydataset),max(CONN_x.Setup.rois.unsmoothedvolumes)),'uni',0)];
 						CONN_h.menus.m_setup_00{13}=conn_menu('popup',boffset+[.482,.56,.19,.03],'',str,'<HTML>source of functional data for ROI timeseries extraction<br/> - Select <b>secondary datasets</b> to extract ROI BOLD timeseries from any of the secondary datasets defined in <i>Setup.Functional</i> (default behavior; e.g. non-smoothed volumes)<br/> - Select <b>primary dataset</b> to extract ROI BOLD timeseries from the primary dataset defined in <i>Setup.Functional</i> (e.g. smoothed volumes)</HTML>','conn(''gui_setup'',13);');
 						%CONN_h.menus.m_setup_00{7}=conn_menu('edit',boffset+[.49,.71,.06,.04],'Dimensions','','<HTML>number of dimensions characterizing the ROI activation <br/> - use <b>1</b> to extract only the mean BOLD timeseries within the ROI <br/> - use <b>2</b> or above to extract one or several PCA components as well</HTML>','conn(''gui_setup'',7);');
-                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.14,.01,.25,.05],'',{'<HTML><i> - ROI tools:</i></HTML>','Display slice viewer','Display slice viewer with functional overlay (QA_REG)','Display slice viewer with structural overlay (QA_REG)','Display slice viewer with MNI reference template overlay (QA_REG)','Display slice viewer with MNI boundaries (QA_NORM)','Display 3d-volume viewer','Display 3d-surface-projection viewer','Display ROI/functional coregistration (SPM)','Display ROI/anatomical coregistration (SPM)','Display single-slice for all subjects (montage)','Display ROI labels','Create new ROI(s) from MNI coordinates','Create new ROI(s) from ICA results','Reassign all ROI files simultaneously','Update changes from Setup to Denoising tab'},'<HTML> - <i>slice viewer</i> displays ROI slices<br/> - <i>slice viewer with functional/structural overlay</i> displays ROI contours overlaid with mean functional or same-subject anatomical volume<br/> - <i>slice viewer with MNI reference template overlay</i> displays ROI contours overlaid with reference MNI-space structural template<br/> - <i>slice viewer with MNI boundaries</i> displays ROI slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/>  - <i>3d viewer</i> displays ROI file on the volume or projected to the cortical surface<br/> - <i>display registration</i> checks the coregistration of the selected subject ROI and anatomical/functional files<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space) for the selected ROI<br/> - <i>display ROI labels</i> displays ROI labels for ROI atlas files and allows editing the associated labels file<br/> - <i>create new ROI from MNI coordinates</i> creates a new spherical-ROI file from a set of user-defined MNI coordinates<br/>  - <i>Add ICA network-ROIs</i> adds ICA networks (spatial components from group-ICA analysis results) as a new ROI atlas<br/> - <i>reassign all ROI files simultaneously</i> reassigns files associated with the selected ROI using a user-generated search/replace filename rule<br/> - <i>update changes</i> updates the Denoising tab information to reflect any modifications in ROI definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
+                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.14,.01,.25,.05],'',{'<HTML><i> - ROI tools -</i></HTML>','Display slice viewer','Display slice viewer with functional overlay (QA_REG)','Display slice viewer with structural overlay (QA_REG)','Display slice viewer with MNI reference template overlay (QA_REG)','Display slice viewer with MNI boundaries (QA_NORM)','Display 3d-volume viewer','Display 3d-surface-projection viewer','Display ROI/functional coregistration (SPM)','Display ROI/anatomical coregistration (SPM)','Display single-slice for all subjects (montage)','Display ROI labels','Create new ROI(s) from MNI coordinates','Create new ROI(s) from ICA results','Reassign all ROI files simultaneously','Update changes from Setup to Denoising tab'},'<HTML> - <i>slice viewer</i> displays ROI slices<br/> - <i>slice viewer with functional/structural overlay</i> displays ROI contours overlaid with mean functional or same-subject anatomical volume<br/> - <i>slice viewer with MNI reference template overlay</i> displays ROI contours overlaid with reference MNI-space structural template<br/> - <i>slice viewer with MNI boundaries</i> displays ROI slices overlaid with 25% boundaries of grey matter tissue probability map in MNI space<br/>  - <i>3d viewer</i> displays ROI file on the volume or projected to the cortical surface<br/> - <i>display registration</i> checks the coregistration of the selected subject ROI and anatomical/functional files<br/> - <i>display single-slice for all subjects</i> creates a summary display showing the same slice across all subjects (slice coordinates in world-space) for the selected ROI<br/> - <i>display ROI labels</i> displays ROI labels for ROI atlas files and allows editing the associated labels file<br/> - <i>create new ROI from MNI coordinates</i> creates a new spherical-ROI file from a set of user-defined MNI coordinates<br/>  - <i>Add ICA network-ROIs</i> adds ICA networks (spatial components from group-ICA analysis results) as a new ROI atlas<br/> - <i>reassign all ROI files simultaneously</i> reassigns files associated with the selected ROI using a user-generated search/replace filename rule<br/> - <i>update changes</i> updates the Denoising tab information to reflect any modifications in ROI definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
 						%conn_menu('frame',boffset+[.38,.03,.30,.12]);
 						tmp=conn_menu('text',boffset+[.40,.105,.20,.04],'','Advanced options:');
                         set(tmp,'horizontalalignment','left','fontangle','normal','fontweight','normal','foregroundcolor',CONN_gui.fontcolorA);
@@ -2567,7 +2695,7 @@ else
                         set(CONN_h.menus.m_setup_00{18},'value', 1);
                         %if ~isfield(CONN_x.Setup,'normalized'), CONN_x.Setup.normalized=1; end
                         %set([CONN_h.menus.m_setup_00{11}],'value',CONN_x.Setup.normalized);
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected ROIs','callback','conn(''gui_setup'',8);');set(CONN_h.menus.m_setup_00{1},'uicontextmenu',hc1);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected ROIs','callback','conn(''gui_setup'',8);');set(CONN_h.menus.m_setup_00{1},'uicontextmenu',hc1);
                         CONN_h.menus.m_setup_00{23}=uicontrol('style','frame','units','norm','position',boffset+[.38,.005,.30,.145],'foregroundcolor',CONN_gui.backgroundcolorA,'backgroundcolor',CONN_gui.backgroundcolorA,'parent',CONN_h.screen.hfig);
                         set(CONN_h.menus.m_setup_00{23},'visible','on'); conn_menumanager('onregion',CONN_h.menus.m_setup_00{23},-1,boffset+[.36,.02,.31,.69]);
                         %if all(CONN_x.Setup.nsessions==1), set([CONN_h.menus.m_setup_00{11},CONN_h.menus.m_setup_00{17}],'visible','off'); end
@@ -2609,7 +2737,7 @@ else
                                         filename1=CONN_x.Setup.rois.files{nsub}{nrois}{1}{1};
                                         [nill,nill,nameext]=spm_fileparts(filename1);%deblank(filename(n1,:)));
 									end
-                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',deblank(filename1),'.txt')))|~isempty(dir(conn_prepend('',deblank(filename1),'.csv')))|~isempty(dir(conn_prepend('',deblank(filename1),'.xls'))));
+                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',deblank(filename1),'.txt'))|conn_existfile(conn_prepend('',deblank(filename1),'.csv'))|conn_existfile(conn_prepend('',deblank(filename1),'.xls')));
                                     txt=sprintf('%d files assigned to %d subjects\n',size(filename,1),length(nsubs));
                                     if ishandle(hmsg), delete(hmsg); end
                                 elseif ~sessionspecific&&subjectspecific&&size(filename,1)==length(nsubs),
@@ -2625,7 +2753,7 @@ else
                                         filename1=CONN_x.Setup.rois.files{nsub}{nrois}{1}{1};
                                         [nill,nill,nameext]=spm_fileparts(filename1);%deblank(filename(n1,:)));
 									end
-                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',deblank(filename1),'.txt')))|~isempty(dir(conn_prepend('',deblank(filename1),'.csv')))|~isempty(dir(conn_prepend('',deblank(filename1),'.xls'))));
+                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',deblank(filename1),'.txt'))|conn_existfile(conn_prepend('',deblank(filename1),'.csv'))|conn_existfile(conn_prepend('',deblank(filename1),'.xls')));
                                     txt=sprintf('%d files assigned to %d subjects\n',size(filename,1),length(nsubs));
                                     if ishandle(hmsg), delete(hmsg); end
                                 elseif sessionspecific&&~subjectspecific&&all(size(filename,1)==nfields0),
@@ -2641,7 +2769,7 @@ else
                                         filename1=CONN_x.Setup.rois.files{nsub}{nrois}{nses}{1};
                                         [nill,nill,nameext]=spm_fileparts(filename1);%deblank(filename(n1,:)));
 									end
-                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',deblank(filename1),'.txt')))|~isempty(dir(conn_prepend('',deblank(filename1),'.csv')))|~isempty(dir(conn_prepend('',deblank(filename1),'.xls'))));
+                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',deblank(filename1),'.txt'))|conn_existfile(conn_prepend('',deblank(filename1),'.csv'))|conn_existfile(conn_prepend('',deblank(filename1),'.xls')));
                                     txt=sprintf('%d files assigned to %d sessions\n',size(filename,1),length(nsess));
                                     if ishandle(hmsg), delete(hmsg); end
                                 elseif subjectspecific&&sessionspecific&&size(filename,1)==nfields,
@@ -2680,7 +2808,7 @@ else
                                             end
                                         end
                                     end                                    
-                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',deblank(filename1),'.txt')))|~isempty(dir(conn_prepend('',deblank(filename1),'.csv')))|~isempty(dir(conn_prepend('',deblank(filename1),'.xls'))));
+                                    CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',deblank(filename1),'.txt'))|conn_existfile(conn_prepend('',deblank(filename1),'.csv'))|conn_existfile(conn_prepend('',deblank(filename1),'.xls')));
                                     txt=sprintf('%d files assigned to %d subjects/sessions\n',size(filename,1),nfields);
                                     if ishandle(hmsg), delete(hmsg); end
 								elseif size(filename,1)==1 || ~subjectspecific&&~sessionspecific,
@@ -2715,7 +2843,7 @@ else
                                                 CONN_x.Setup.rois.files{nsub}{nrois}{nses}=temp;
                                             end
                                         end
-                                        CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',deblank(filename1),'.txt')))|~isempty(dir(conn_prepend('',deblank(filename1),'.csv')))|~isempty(dir(conn_prepend('',deblank(filename1),'.xls'))));
+                                        CONN_x.Setup.rois.multiplelabels(nrois)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',deblank(filename1),'.txt'))|conn_existfile(conn_prepend('',deblank(filename1),'.csv'))|conn_existfile(conn_prepend('',deblank(filename1),'.xls')));
                                         if ~isfield(CONN_x.Setup.rois,'dimensions') || length(CONN_x.Setup.rois.dimensions)<nrois, CONN_x.Setup.rois.dimensions{nrois}=1; end
                                         if ~isfield(CONN_x.Setup.rois,'mask') || length(CONN_x.Setup.rois.mask)<nrois, CONN_x.Setup.rois.mask(nrois)=0; end
                                         if ~isfield(CONN_x.Setup.rois,'subjectspecific') || length(CONN_x.Setup.rois.subjectspecific)<nrois, CONN_x.Setup.rois.subjectspecific(nrois)=0; end
@@ -2983,7 +3111,7 @@ else
                                                     if numel(temp)==1,
                                                         temp=cellstr(conn_expandframe(temp{1}));
                                                     end
-                                                    files{end+1}=spm_vol(temp{1});
+                                                    files{end+1}=conn_fileutils('spm_localvol',temp{1});
                                                     filenames{end+1}=temp{1};
                                                 end
                                                 for nroi=nrois(:)',
@@ -2992,7 +3120,7 @@ else
                                                     %[V,str,icon,filename]=conn_getinfo(filename);
                                                     %CONN_x.Setup.rois.files{nsub}{nroi}{nses}={filename,str,icon};
                                                     CONN_x.Setup.rois.files{nsub}{nroi}{nses}=conn_file(filename);
-                                                    files{end+1}=CONN_x.Setup.rois.files{nsub}{nroi}{nses}{3}(1);
+                                                    files{end+1}=conn_fileutils('spm_localvol',CONN_x.Setup.rois.files{nsub}{nroi}{nses}{3}(1));
                                                     filenames{end+1}=CONN_x.Setup.rois.files{nsub}{nroi}{nses}{1};
                                                 end
                                             end
@@ -3026,12 +3154,12 @@ else
                                                     else displabel{end+1}=sprintf('Subject %d session %d',nsub,nses);
                                                     end
                                                 else
-                                                    files=spm_vol(Vsource);
+                                                    files=conn_fileutils('spm_vol',Vsource);
                                                     if conn_surf_dimscheck(files), files=conn_surf_parent(files); end % surface
                                                     nvols=unique([1 numel(files)]); % only first and last volumes
                                                     %nvols=unique(round(linspace(1,numel(files),32))); % not more than 32 volumes
                                                     for nvol=nvols(:)'
-                                                        dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(nvol),pinv(files(nvol).mat)*txyz),data.buttondown.matdim.dim(1:2))'));
+                                                        dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(nvol),pinv(files(nvol).mat)*txyz),data.buttondown.matdim.dim(1:2))'));
                                                         if ~sessionspecific, displabel{end+1}=sprintf('Subject %d volume %d',nsub,nvol);
                                                         else displabel{end+1}=sprintf('Subject %d session %d volume %d',nsub,nses,nvol);
                                                         end
@@ -3098,7 +3226,7 @@ else
                                         return;
                                     case 13, % new ROI from MNI coordinates
                                         set(CONN_h.menus.m_setup_00{14},'value',1);
-                                        answ={'0 0 0','10',fullfile(pwd,'newroi.nii'),'2'};
+                                        answ={'0 0 0','10',fullfile(conn_projectmanager('pwd'),'newroi.nii'),'2'};
                                         answ=inputdlg({'MNI coordinates (mm)','ROI spherical radius (mm)','ROI-file name','ROI-file resolution (mm)'},'',1,answ);
                                         if numel(answ)==4,
                                             xyz=str2num(answ{1}); if isempty(xyz), return; end
@@ -3138,8 +3266,8 @@ else
                                             filename=fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(idata).name,['ICA.ROIs.nii']);
                                         else filename=fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses.name,['ICA.ROIs.nii']);
                                         end
-                                        if isempty(dir(filename)), ICAPCA='PCA'; filename=regexprep(filename,'ICA\.ROIs\.nii$','PCA.ROIs.nii'); end
-                                        if isempty(dir(filename)), conn_msgbox({'ICA results not found',' ','Please complete first group-ICA anayses (from first-level analysis voxel-to-voxel/ICA tab)'},'',2); 
+                                        if ~conn_existfile(filename), ICAPCA='PCA'; filename=regexprep(filename,'ICA\.ROIs\.nii$','PCA.ROIs.nii'); end
+                                        if ~conn_existfile(filename), conn_msgbox({'ICA results not found',' ','Please complete first group-ICA anayses (from first-level analysis voxel-to-voxel/ICA tab)'},'',2); 
                                         else
                                             nrois=numel(CONN_x.Setup.rois.names);
                                             if any(strcmp(CONN_x.Setup.rois.names,['group-',ICAPCA]))
@@ -3349,7 +3477,7 @@ else
 						set(CONN_h.menus.m_setup_00{4},'string','','tooltipstring','');
                     elseif ok,
                         if nrois<=3&&conn_existfile(conn_prepend('e',CONN_x.Setup.rois.files{nsub}{nrois}{nses}{1})), 
-                            vol=[CONN_x.Setup.rois.files{nsub}{nrois}{nses}{3} spm_vol(conn_prepend('e',CONN_x.Setup.rois.files{nsub}{nrois}{nses}{1}))];
+                            vol=[CONN_x.Setup.rois.files{nsub}{nrois}{nses}{3} conn_fileutils('spm_vol',conn_prepend('e',CONN_x.Setup.rois.files{nsub}{nrois}{nses}{1}))];
                             CONN_h.menus.general.names=reshape({'Original volume','Thresholded/eroded volume'},[1,1,2]);
                         else
                             vol=CONN_x.Setup.rois.files{nsub}{nrois}{nses}{3};
@@ -3378,7 +3506,7 @@ else
 						CONN_h.menus.m_setup_00{4}=[];[CONN_h.menus.m_setup_00{4}(1) CONN_h.menus.m_setup_00{4}(2)]=conn_menu('edit',boffset+[.58,.63,.08,.04],'Onset',[],'<HTML>onset time(s) marking the beginning of each block/event (in seconds) <b>for the selected condition(s)/subject(s)/session(s)</b><br/> - set <i>onset</i> to <b>0</b> and <i>duration</i> to <b>inf</b> to indicate that this condition is present during the entire session (e.g. resting state)<br/> - set <i>onset</i> and <i>duration</i> to <b>[]</b> (empty brackets) if the condition is not present in this session (e.g. pre- post- designs) <br/> - enter a series of block onsets if the condition is only present during a portion of this session (e.g. block designs)</HTML>','conn(''gui_setup'',4);');
 						CONN_h.menus.m_setup_00{5}=[];[CONN_h.menus.m_setup_00{5}(1) CONN_h.menus.m_setup_00{5}(2)]=conn_menu('edit',boffset+[.66,.63,.08,.04],'Duration',[],'<HTML>duration(s) of condition blocks/events (in seconds) <b>for the selected condition(s)/subject(s)/session(s)</b><br/> - set <i>onset</i> to <b>0</b> and <i>duration</i> to <b>inf</b> to indicate that this condition is present during the entire session (e.g. resting state)<br/> - set <i>onset</i> and <i>duration</i> to <b>[]</b> (empty brackets) if the condition is not present in this session (e.g. pre- post- designs) <br/> - enter a series of block/event durations if the condition is only present during a portion of this session (e.g. block designs) <br/> or a single value if all blocks/events have the same duration</HTML>','conn(''gui_setup'',5);');
                         analysistypes={'average across input conditions','standard deviation across input conditions','minimum across input conditions','maximum across input conditions','regressor in linear model fitting input conditions','user-defined function across input conditions'};
-						CONN_h.menus.m_setup_00{15}=[];[CONN_h.menus.m_setup_00{15}(1) CONN_h.menus.m_setup_00{15}(2)]=conn_menu('popup',boffset+[.48,.62,.32,.05],'Model as',analysistypes,'<HTML>Select function<br/> - connectivity values in the selected condition will be defined as a function of the connectivity values in other user-defined conditions<br/> - select <i>average</i> to define this condition as the average across other previously-defined conditions<br/> - select <i>standard deviation</i> to define this condition as the standard deviation across previously-defined conditions<br/> - select <i>linear model</i> to define this condition as a function of the regressor coefficients of a linear model fitting other previously-defined <br/>conditions. You will be promped to enter a design matrix (with as many rows as input conditions and one or more columns). The output <br/>condition value is the regressor coefficient associated with the first column of this desing matrix. Optionally the design matrix may contain second-<br/>level covariate names in the place of individual numbers to indicate subject-specific values<br/> - select <i>user-defined</i> to define this condition as any arbitrary user-defined function of other previously-defined conditions. You will be prompted<br/> to enter a function handle or a function name for a user-defined function of the form Y=f(X) with X being a (MxN) matrix with data from M conditions<br/> and Y being a (1xN) row vector with the output condition values. Optionally f may have the form f(X,Cvalues,Cnames) and it will receive as additional <br/>inputs the second-level covariate values and names for the subject being analyzed</HTML>','conn(''gui_setup'',15);');
+						CONN_h.menus.m_setup_00{15}=[];[CONN_h.menus.m_setup_00{15}(1) CONN_h.menus.m_setup_00{15}(2)]=conn_menu('popup',boffset+[.48,.61,.32,.05],'Model as',analysistypes,'<HTML>Select function<br/> - connectivity values in the selected condition will be defined as a function of the connectivity values in other user-defined conditions<br/> - select <i>average</i> to define this condition as the average across other previously-defined conditions<br/> - select <i>standard deviation</i> to define this condition as the standard deviation across previously-defined conditions<br/> - select <i>linear model</i> to define this condition as a function of the regressor coefficients of a linear model fitting other previously-defined <br/>conditions. You will be promped to enter a design matrix (with as many rows as input conditions and one or more columns). The output <br/>condition value is the regressor coefficient associated with the first column of this desing matrix. Optionally the design matrix may contain second-<br/>level covariate names in the place of individual numbers to indicate subject-specific values<br/> - select <i>user-defined</i> to define this condition as any arbitrary user-defined function of other previously-defined conditions. You will be prompted<br/> to enter a function handle or a function name for a user-defined function of the form Y=f(X) with X being a (MxN) matrix with data from M conditions<br/> and Y being a (1xN) row vector with the output condition values. Optionally f may have the form f(X,Cvalues,Cnames) and it will receive as additional <br/>inputs the second-level covariate values and names for the subject being analyzed</HTML>','conn(''gui_setup'',15);');
 						CONN_h.menus.m_setup_00{12}=conn_menu('image',boffset+[.48,.42,.26,.15],'Study Design   (x:sessions/scans; y:conditions)','','',@conn_callbackdisplay_conditiondesign,@conn_callbackdisplay_conditiondesignclick);
 						tmp=conn_menu('text',boffset+[.48,.30,.20,.04],'','Advanced options:');
                         set(tmp,'horizontalalignment','left','fontangle','normal','fontweight','normal','foregroundcolor',CONN_gui.fontcolorA);
@@ -3386,12 +3514,12 @@ else
                         CONN_h.menus.m_setup_00{7}=conn_menu('popup',boffset+[.49,.22,.19,.05],'Task modulation factor',analysistypes,'<HTML> optional condition-specific temporal modulation factor:<br/>  - for First-level analyses using a weighted GLM model (standard functional connectivity) this field allows you to manually define <br/> non-default weighting functions (<i>task/condition factor</i> weighting option in first-level analyses)<br/>  - for First-level analyses using a gPPI task-modulation model this field defines the condition-specific task-interaction factor<br/> (i.e. the <i>psychological factor</i> timeseries; selecting <i>condition blocks/events</i> uses the standard hrf-convolved condition blocks)</HTML>','conn(''gui_setup'',7);');
                         CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.49,.14,.19,.05],'Time-frequency decomposition',{'no decomposition','fixed band-pass filter','frequency decomposition (filter bank)','temporal decomposition (sliding-window)'},'<HTML>optional condition-specific frequency filter or time/frequency decompositions:<br/> - select <i>fixed band-pass filter</i> to define a condition-specific band-pass filter for the current condition (in addition to the filter specified <br/>during <i>Denoising</i> which applies to all conditions equally) <br/> - when selecting frequency- or temporal- decompositions, several new conditions will be automatically created during the Denoising step<br/> by partitioning the current condition in the frequency or temporal domains, respectively</HTML>','conn(''gui_setup'',10);');
                         CONN_h.menus.m_setup_00{11}=conn_menu('popup',boffset+[.68,.22,.12,.05],'Missing conditions',{'No missing data','Allow missing data'},'<HTML>Treatment of potential missing-conditions across some subjects: (this option applies to <b>all conditions)</b><br/> - If one condition is defined as <i>not present</i> (or its <i>onset</i> and <i>duration</i> fields are left empty) on <i>all</i> sessions of a given subject, that subject/condition''s condition-specific connectivity <br/> can not be computed. CONN treats this as ''missing data'' and the subject(s) with one missing condition will be automatically disregarded in any second-level analyses that involves this condition <br/> - Select ''<i>No missing data</i>'' if no missing data should be expected. CONN will warn the user if a condition has been set as <i>not present</i> (or it has missing  <i>onset/duration</i> fields) in <i>all</i> of the sessions <br/> of any given subject (this check helps avoid accidentally entering incomplete condition information). <br/> - Select ''<i>Allow missing data</i>'' if missing data should be expected, and CONN will skip the above check (e.g. allowing attrition in longitudinal analyses)</HTML>','conn(''gui_setup'',11);');                        
-                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.14,.20,.05],'',{'<HTML><i> - condition tools:</i></HTML>','Merge (union) of selected conditions','Merge (not-in-union) of selected conditions','Copy selected condition to covariates list','Move selected condition to covariates list','Import condition info from text file(s)','Update changes from Setup to Denoising tab'},'<HTML> - <i>merge conditions</i> combines all onsets/durations from multiple conditions into a single new condition (as the union of all intervals, or as those intervals not in their union)<br/> - <i>copy to covariate list</i> creates a new first-level covariate containing the hrf-convolved condition effects<br/>  - <i>move to covariate list</i> deletes this condition and creates instead a new first-level covariate containing the hrf-convolved <br/> condition effects (e.g. for Fair et al. resting state analyses of task-related data)<br/> - <i>Import condition</i> imports condition names and onsets/durations values (for all subjects/sessions) from a text file<br/> Text file may be in CONN-legacy or BIDS format (see <i>help conn_importcondition</i> for file-format information</i>)<br/> - <i>update changes</i> updates the Denoising tab information to reflect any modifications in condition definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
+                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.14,.20,.05],'',{'<HTML><i> - condition tools -</i></HTML>','Merge (union) of selected conditions','Merge (not-in-union) of selected conditions','Copy selected condition to covariates list','Move selected condition to covariates list','Import condition info from text file(s)','Update changes from Setup to Denoising tab'},'<HTML> - <i>merge conditions</i> combines all onsets/durations from multiple conditions into a single new condition (as the union of all intervals, or as those intervals not in their union)<br/> - <i>copy to covariate list</i> creates a new first-level covariate containing the hrf-convolved condition effects<br/>  - <i>move to covariate list</i> deletes this condition and creates instead a new first-level covariate containing the hrf-convolved <br/> condition effects (e.g. for Fair et al. resting state analyses of task-related data)<br/> - <i>Import condition</i> imports condition names and onsets/durations values (for all subjects/sessions) from a text file<br/> Text file may be in CONN-legacy or BIDS format (see <i>help conn_importcondition</i> for file-format information</i>)<br/> - <i>update changes</i> updates the Denoising tab information to reflect any modifications in condition definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
 						set(CONN_h.menus.m_setup_00{3},'max',2);
 						set(CONN_h.menus.m_setup_00{2},'string',[repmat('Subject ',[CONN_x.Setup.nsubjects,1]),num2str((1:CONN_x.Setup.nsubjects)')],'max',2,'value',1:CONN_x.Setup.nsubjects);
 						set(CONN_h.menus.m_setup_00{1},'string',CONN_x.Setup.conditions.names,'max',2);
                         nsess=CONN_x.Setup.nsessions(1); set(CONN_h.menus.m_setup_00{3},'string',[repmat('Session ',[nsess,1]),num2str((1:nsess)')],'value',min(nsess,get(CONN_h.menus.m_setup_00{3},'value')));
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected condition(s)','callback','conn(''gui_setup'',8);');
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected condition(s)','callback','conn(''gui_setup'',8);');
                         uimenu(hc1,'Label','replicate selected condition(s) as a new condition','callback','conn(''gui_setup'',9,''replicate'');');
                         %uimenu(hc1,'Label','replicate baseline/opposite of selected condition(s) as a new condition','callback','conn(''gui_setup'',9,''replicateopposite'');');
                         %uimenu(hc1,'Label','move selected condition to covariates list (for Fair et al. resting state analyses of task-related data)','callback','conn(''gui_setup'',9,''move'');');
@@ -3535,7 +3663,7 @@ else
                                         answ=conn_questdlg({'This step will update the Denoising tab information to reflect any modifications in condition definitions',' or options performed here in the Setup tab (e.g. after additing a new condition or changing an existing one)',' ','(note: same effect as pressing Setup.Done but limited only to processes involving Setup.Conditions information)'}, 'conn','Start','Cancel','Start');
                                         if strcmp(answ,'Start'),
                                             conn_process setup_conditions;
-                                            conn save;
+                                            if ~conn_projectmanager('inserver'), conn save; end
                                             set(CONN_h.menus.m_setup_00{1},'string',CONN_x.Setup.conditions.names,'value',max(1,min(length(CONN_x.Setup.conditions.names)-1,max(get(CONN_h.menus.m_setup_00{1},'value')))));
                                         end
                                     else
@@ -3639,7 +3767,7 @@ else
                                             if numel(answ)==1&&answ>1, 
                                                 [CONN_x.Setup.conditions.filter{nconditions}]=deal(answ); 
                                                 answ=questdlg({'This will create additional conditions (one per frequency band)','Do you wish to create these conditions now?'},'','Yes','Later','Yes');
-                                                if ~isempty(answ)&&strcmp(answ,'Yes'),conn_process('setup_conditionsdecomposition'); conn('gui_setup'); end
+                                                if ~isempty(answ)&&strcmp(answ,'Yes'), conn_process('setup_conditionsdecomposition'); conn('gui_setup'); end
                                             end
                                         end
                                     case 4,
@@ -3663,7 +3791,7 @@ else
                                             if numel(answ)==2&&numel(answ{1})>1&&numel(answ{2})==1, 
                                                 [CONN_x.Setup.conditions.filter{nconditions}]=deal([answ{2} answ{1}(:)']); 
                                                 answ=conn_questdlg({'This will create additional conditions (one per sliding-window onset)','Do you wish to create these conditions now?'},'','Yes','Later','Yes');
-                                                if ~isempty(answ)&&strcmp(answ,'Yes'),conn_process('setup_conditionsdecomposition'); conn('gui_setup'); end
+                                                if ~isempty(answ)&&strcmp(answ,'Yes'), conn_process('setup_conditionsdecomposition'); conn('gui_setup'); end
                                             end
                                         end
                                 end
@@ -3833,7 +3961,7 @@ else
                         %ht=uicontrol('style','frame','units','norm','position',[.78,.06,.20,.84],'foregroundcolor',CONN_gui.backgroundcolor,'backgroundcolor',CONN_gui.backgroundcolor);
                         %set(ht,'visible','on'); conn_menumanager('onregion',ht,-1,boffset+[.19,0,.81,1]);
 						CONN_h.menus.m_setup_00{7}=conn_menu('edit',boffset+[.455,.71,.14,.04],'Covariate name','','First-level covariate name','conn(''gui_setup'',7);');
-                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.19,.2,.05],'',{'<HTML><i> - covariate tools:</i></HTML>','Display covariate & single-slice functional (movie)','Compute new/derived first-level covariates','Compute new/derived second-level covariates','Reassign all covariate files simultaneously','Update changes from Setup to Denoising tab'},'<HTML> - <i>display covariate</i> displays covariate values together with corresponding single-slice BOLD volumes <br/> <HTML> - <i>compute new/derived first-level covariates</i> creates additional first-level covariates from existing first-level covariates (e.g. to compute alternative FD measures from realignment <br/> parameters, or to manually recompute a scrubbing covariate from ART motion/BOLDchange timeseries) <br/> <HTML> - <i>compute new/derived second-level covariates</i> creates new second-level covariates by aggregating the selected first-level covariate across scans&sessions<br/> - <i>reassign all covariate files simultaneously</i> reassigns files associated with the selected covariate using a user-generated search/replace filename rule<br/> - <i>update changes</i>updates the Denoising tab information to reflect any modifications in first-level covariate definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
+                        CONN_h.menus.m_setup_00{14}=conn_menu('popup',boffset+[.20,.19,.2,.05],'',{'<HTML><i> - covariate tools -</i></HTML>','Display covariate & single-slice functional (movie)','Compute new/derived first-level covariates','Compute new/derived second-level covariates','Reassign all covariate files simultaneously','Update changes from Setup to Denoising tab'},'<HTML> - <i>display covariate</i> displays covariate values together with corresponding single-slice BOLD volumes <br/> <HTML> - <i>compute new/derived first-level covariates</i> creates additional first-level covariates from existing first-level covariates (e.g. to compute alternative FD measures from realignment <br/> parameters, or to manually recompute a scrubbing covariate from ART motion/BOLDchange timeseries) <br/> <HTML> - <i>compute new/derived second-level covariates</i> creates new second-level covariates by aggregating the selected first-level covariate across scans&sessions<br/> - <i>reassign all covariate files simultaneously</i> reassigns files associated with the selected covariate using a user-generated search/replace filename rule<br/> - <i>update changes</i>updates the Denoising tab information to reflect any modifications in first-level covariate definitions or options performed here in the Setup tab</HTML>','conn(''gui_setup'',14);');
                         %CONN_h.menus.m_setup_00{14}=uicontrol('style','popupmenu','units','norm','position',boffset+[.455,.18,.14,.04],'string',{'<HTML><i> - options:</i></HTML>','subject-level aggreagate'},'foregroundcolor','w','backgroundcolor',CONN_gui.backgroundcolorA,'fontsize',8+CONN_gui.font_offset,'callback','conn(''gui_setup'',14);','tooltipstring','First-level covariates additional options');
                         %CONN_h.menus.m_setup_00{9}=uicontrol('style','pushbutton','units','norm','position',boffset+[.455,.18,.14,.04],'string','subject-level aggregate','tooltipstring','Compute subject-level aggregated measures and create associated 2nd-level covariates','callback','conn(''gui_setup'',9);','fontsize',8+CONN_gui.font_offset);
 						set(CONN_h.menus.m_setup_00{4}.files,'max',2);
@@ -3841,7 +3969,7 @@ else
 						set(CONN_h.menus.m_setup_00{2},'string',[repmat('Subject ',[CONN_x.Setup.nsubjects,1]),num2str((1:CONN_x.Setup.nsubjects)')],'max',2);
 						set(CONN_h.menus.m_setup_00{1},'string',CONN_x.Setup.l1covariates.names,'max',2);
 						nsess=CONN_x.Setup.nsessions(1); set(CONN_h.menus.m_setup_00{3},'string',[repmat('Session ',[nsess,1]),num2str((1:nsess)')],'value',min(nsess,get(CONN_h.menus.m_setup_00{3},'value')));
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected covariate','callback','conn(''gui_setup'',8);');set(CONN_h.menus.m_setup_00{1},'uicontextmenu',hc1);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','remove selected covariate','callback','conn(''gui_setup'',8);');set(CONN_h.menus.m_setup_00{1},'uicontextmenu',hc1);
                         %hc1=uicontextmenu;uimenu(hc1,'Label','go to source folder','callback','conn(''gui_setup'',5);');set(CONN_h.menus.m_setup_00{5},'uicontextmenu',hc1);
 					else
 						switch(varargin{2}),
@@ -3854,7 +3982,7 @@ else
                                 nsessall=get(CONN_h.menus.m_setup_00{3},'value'); 
                                 nsessmax=CONN_x.Setup.nsessions(min(length(CONN_x.Setup.nsessions),nsubs));
                                 nfields=sum(sum(conn_bsxfun(@le,nsessall(:),nsessmax(:)')));
-								filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
+                                filename=fliplr(deblank(fliplr(deblank(char(varargin{3})))));
                                 txt=''; bak1=CONN_x.Setup.l1covariates.files;
 								if size(filename,1)==nfields,
                                     firstallsubjects=false;
@@ -3976,7 +4104,7 @@ else
                                                         dispdata{end+1}=nan(dim([2 1]));
                                                         displabel{end+1}=sprintf('Subject %d session %d',nsub,nses);
                                                     else
-                                                        files=spm_vol(Vsource);
+                                                        files=conn_fileutils('spm_vol',Vsource);
                                                         if conn_surf_dimscheck(files), files=conn_surf_parent(files); end % surface
                                                         for nvol=1:numel(files)
                                                             if numel(txyz)<=1
@@ -3987,19 +4115,25 @@ else
                                                                 end
                                                                 txyz=files(1).mat*[tx(:) ty(:) zslice+zeros(numel(tx),1) ones(numel(tx),1)]';
                                                             end
-                                                            dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(nvol),pinv(files(nvol).mat)*txyz),dim(1:2))'));
+                                                            dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(nvol),pinv(files(1).mat)*txyz),dim(1:2))')); % resamples at same volume coordinates for all timepoints
+                                                            %dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(nvol),pinv(files(nvol).mat)*txyz),dim(1:2))'));
                                                             displabel{end+1}=sprintf('Subject %d session %d volume %d dataset %d',nsub,nses,nvol,nset);
                                                         end
-                                                        tdata=CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3};
+                                                        
+                                                        %tdata=CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3};
+                                                        tdata=conn_get_l1covariate(nsub,nl1covariates(1),nses);
                                                         if artts, 
                                                             tdata=sum(tdata,2);
-                                                            if numel(nl1covariates)>1, tdata=cat(2,CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(end)}{nses}{3},tdata);
+                                                            if numel(nl1covariates)>1, tdata=cat(2,conn_get_l1covariate(nsub,nl1covariates(end),nses),tdata);
+                                                            %if numel(nl1covariates)>1, tdata=cat(2,CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(end)}{nses}{3},tdata);
                                                             else
                                                                 [tnamepath,tnamename,tnameext]=fileparts(CONN_x.Setup.l1covariates.files{nsub}{nl1covariates}{nses}{1});
                                                                 tname=fullfile(tnamepath,[regexprep(tnamename,'art_regression_outliers_(and_movement_)?','art_regression_timeseries_') tnameext]);
                                                                 if conn_existfile(tname)
-                                                                    tdata2=conn_file(tname);
-                                                                    if ~isempty(tdata2), tdata=cat(2, abs(tdata2{3}),tdata); end
+                                                                    tdata2=conn_loadtextfile(tname,false);
+                                                                    tdata=cat(2, abs(tdata2),tdata);
+                                                                    %tdata2=conn_file(tname);
+                                                                    %if ~isempty(tdata2), tdata=cat(2, abs(tdata2{3}),tdata); end
                                                                 end
                                                             end
                                                         else 
@@ -4046,7 +4180,7 @@ else
                                                 nsess=CONN_x.Setup.nsessions(min(numel(CONN_x.Setup.nsessions),nsubject));
                                                 for nses=1:nsess
                                                     try
-                                                        temp=load(CONN_x.Setup.l1covariates.files{nsubject}{icov}{nses}{1});
+                                                        temp=conn_loadmatfile(CONN_x.Setup.l1covariates.files{nsubject}{icov}{nses}{1});
                                                         y1(nsubject)=y1(nsubject)+sum(~any(temp.R~=0,2),1);
                                                         y2(nsubject)=y2(nsubject)+sum(sum(temp.R~=0));
                                                     catch
@@ -4073,7 +4207,7 @@ else
                                             answ=conn_questdlg({'This step will update the Denoising tab information to reflect any modifications in first-level covariate definitions',' or options performed here in the Setup tab (e.g. after additing a new first-level covariate or changing an existing one)',' ','(note: same effect as pressing Setup.Done but limited only to processes involving Setup.Covariates (first-level) information)'}, 'conn','Start','Cancel','Start');
                                             if strcmp(answ,'Start'),
                                                 conn_process setup_covariates;
-                                                conn save;
+                                                if ~conn_projectmanager('inserver'), conn save; end
                                             end
                                         else
                                             conn_msgbox({'Setup step has not been run yet','Please press ''Done'' button when ready to propagate all Setup information to the Denoising step'},'',2); 
@@ -4110,7 +4244,8 @@ else
 						set(CONN_h.menus.m_setup_00{5},'string','','tooltipstring','');
                         set(CONN_h.menus.m_setup_00{14},'visible','off'); 
                     elseif ok,
-						conn_menu('updateplotstack',CONN_h.menus.m_setup_00{6},CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3});
+                        tdata=conn_get_l1covariate(nsub,nl1covariates(1),nses,'-cache');
+						conn_menu('updateplotstack',CONN_h.menus.m_setup_00{6},tdata); %CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3});
                         tempstr=cellstr(CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{1});
                         if isequal(tempstr,{'[raw values]'}), set(CONN_h.menus.m_setup_00{5},'string',conn_cell2html([{sprintf('[1 file] x [size %d %d]',size(CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3},1),size(CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{3},2))},tempstr]),'tooltipstring',conn_cell2html(tempstr));
                         else set(CONN_h.menus.m_setup_00{5},'string',conn_cell2html(CONN_x.Setup.l1covariates.files{nsub}{nl1covariates(1)}{nses}{2}),'tooltipstring',conn_cell2html(tempstr));
@@ -4142,7 +4277,7 @@ else
 						CONN_h.menus.m_setup_00{3}=conn_menu('edit',boffset+[.43,.71,.22,.04],'Covariate name','','Second-level covariate name','conn(''gui_setup'',3);');
 						[CONN_h.menus.m_setup_00{2},CONN_h.menus.m_setup_00{4}]=conn_menu('edit',boffset+[.43,.60,.36,.04],'Values',[],'<HTML>values of this covariate for each subject <br/> - enter one value per subject <br/> - for multiple covariates enter one row of values per covariate (separated by '';'') <br/> - you may also enter functions of other covariates (e.g. AllSubjects - Males)<br/> - other valid syntaxes  include any valid Matlab command or variable name evaluated in the base workspace (e.g. rand)<br/> - note: changes to second-level covariates do not require re-running <i>Setup</i> and subsequent steps<br/> (they are directly available in the <i>second-level Results</i> tab)</HTML>','conn(''gui_setup'',2);');
 						CONN_h.menus.m_setup_00{6}=conn_menu('table',boffset+[.43,.29,.36,.14],'',[],'<HTML>values of this covariate for each subject <br/> - enter one value per subject <br/></HTML>','conn(''gui_setup'',6);');
-                        CONN_h.menus.m_setup_00{11}=conn_menu('popup',boffset+[.20,.15,.20,.05],'',{'<HTML><i> - covariate tools:</i></HTML>','Create interaction(s) of selected covariates','Discretize selected covariate','Orthogonalize selected covariate(s)','Import new covariate(s) data from file','Export selected covariate(s) data to file'},'<HTML><i> - Create interaction</i> creates 2nd- or higher-order interaction terms among the selected covariates <br/><i> - Discretize</i> converts the selected multi-valued covariates (e.g. a single covarite with values 1 to N) into multiple categorical covariates (e.g. N covariates with values 0/1)<br/><i> - Orthogonalize</i> makes the selected covariate(s) orthogonal to other covariate(s) (e.g. for centering or when interested in the unique variance associated with this effect) <br/> - <i>Import</i> loads selected covariate values from a file (Text, Spreadsheet, or Matlab format)<br/> - <i>Export</i> saves selected covariate values to a file (Text, Spreadsheet, or Matlab format)</HTML>','conn(''gui_setup'',10+get(gcbo,''value''));');
+                        CONN_h.menus.m_setup_00{11}=conn_menu('popup',boffset+[.20,.15,.20,.05],'',{'<HTML><i> - covariate tools -</i></HTML>','Create interaction(s) of selected covariates','Discretize selected covariate','Orthogonalize selected covariate(s)','Import new covariate(s) data from file','Export selected covariate(s) data to file'},'<HTML><i> - Create interaction</i> creates 2nd- or higher-order interaction terms among the selected covariates <br/><i> - Discretize</i> converts the selected multi-valued covariates (e.g. a single covarite with values 1 to N) into multiple categorical covariates (e.g. N covariates with values 0/1)<br/><i> - Orthogonalize</i> makes the selected covariate(s) orthogonal to other covariate(s) (e.g. for centering or when interested in the unique variance associated with this effect) <br/> - <i>Import</i> loads selected covariate values from a file (Text, Spreadsheet, or Matlab format)<br/> - <i>Export</i> saves selected covariate values to a file (Text, Spreadsheet, or Matlab format)</HTML>','conn(''gui_setup'',10+get(gcbo,''value''));');
                         %CONN_h.menus.m_setup_00{11}=conn_menu('pushbutton',boffset+[.4,.24,.05,.045],'','import','imports values from file','conn(''gui_setup'',11);');
                         %CONN_h.menus.m_setup_00{12}=conn_menu('pushbutton',boffset+[.45,.24,.05,.045],'','export','exports values to file','conn(''gui_setup'',12);');
                         %set([CONN_h.menus.m_setup_00{11},CONN_h.menus.m_setup_00{12}],'visible','off');%,'fontweight','bold');
@@ -4158,7 +4293,7 @@ else
                         else CONN_h.menus.m_setup.showneffects=find(cellfun(@(x)isempty(regexp(x,'^_')),CONN_x.Setup.l2covariates.names));
                         end
 						set(CONN_h.menus.m_setup_00{1},'string',conn_strexpandidx(CONN_h.menus.m_setup.showneffects,CONN_x.Setup.l2covariates.names,CONN_x.Setup.l2covariates.descrip),'max',2);
-                        hc1=uicontextmenu(CONN_h.screen.hfig);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                         uimenu(hc1,'Label','remove selected covariate(s)','callback','conn(''gui_setup'',8);');
                         uimenu(hc1,'Label','move selected covariate(s) up','callback','conn(''gui_setup'',9,''up'');');
                         uimenu(hc1,'Label','move selected covariate(s) down','callback','conn(''gui_setup'',9,''down'');');
@@ -4250,6 +4385,7 @@ else
                                                 tnewdesc=[tnewdesc, {[conn_strjoinstr(arrayfun(@(n)sprintf('%s=%d',tnames{n},ux(n1,n)),1:numel(tnames),'uni',0),' & ')]}]; 
                                             end
                                         end
+                                    else return
                                     end
                                     nl2covariates=numel(CONN_x.Setup.l2covariates.names); 
                                 elseif varargin{2}==15 % import
@@ -4265,7 +4401,7 @@ else
                                     tnewdesc={sprintf('data imported from %s',tfilename)};
                                     switch(tfileext)
                                         case '.mat'
-                                            tdata=load(tfilename,'-mat');
+                                            tdata=conn_loadmatfile(tfilename,'-mat');
                                             tnames=fieldnames(tdata);
                                             if numel(tnames)==1, idata=1;jdata=[];kdata=[];
                                             else
@@ -4670,35 +4806,79 @@ else
 % 			end
 
 		case 'gui_setup_load',
-            [filename,pathname]=uigetfile({'*.mat','conn-project files (conn_*.mat)';'*','All Files (*)'},'Loads CONN project','conn_*.mat');
-            %[filename,pathname]=uigetfile({'conn_*.mat','conn-project files (conn_*.mat)'},'Loads CONN project');
-			if ischar(filename),
-				filename=fullfile(pathname,filename);
-                ht=conn_msgbox('Loading project file. Please wait...','',-1);
-                conn('load',filename,true);
-                conn_disp('fprintf','Project %s loaded\n',filename);
-                if ishandle(ht), delete(ht); end
-                conn gui_recent_set;
-                conn gui_ispending;
-% 				try, load(filename,'CONN_x'); CONN_x.filename=filename; catch, waitfor(errordlg(['Failed to load file ',filename,'.'],mfilename)); return; end
-%                 try, conn_updatefilepaths; end
-%                 CONN_x.filename=filename;
-%                 conn_updatefolders;
+            if ~CONN_gui.isremote
+                [filename,pathname]=uigetfile({'*.mat','conn-project files (conn_*.mat)';'*','All Files (*)'},'Loads CONN project','conn_*.mat');
+                if ischar(filename)&&~isempty(filename),filename=fullfile(pathname,filename);end
+            else
+                if nargin<2,
+                    conn('gui_clear');
+                    conn_menu('filesearchprojectload',[],'CONN project name: ','*.mat','',{@conn,'gui_setup_load'});
+                    return;
+                end
+                filename=varargin{2};
+            end
+			if ischar(filename)&&~isempty(filename),
+                if ~isempty(regexp(filename,'\<bakfile(\.mat)?$')), [filename, nill]=fileparts(filename); end % if entering conn_*/bakfile.mat
+                filename=conn_prepend('',filename,'.mat'); % if entering conn_* directory
+                if ~conn_existfile(filename,0), conn_msgbox({sprintf('File %s cannot be found',filename)},'',2);
+                else
+                    %filename=fullfile(pathname,filename);
+                    ht=conn_msgbox('Loading project file. Please wait...','',-1);
+                    conn('load',filename,true);
+                    conn_disp('fprintf','Project %s loaded\n',filename);
+                    if ishandle(ht), delete(ht); end
+                    conn gui_recent_set;
+                    conn gui_ispending;
+                    % 				try, load(filename,'CONN_x'); CONN_x.filename=filename; catch, waitfor(errordlg(['Failed to load file ',filename,'.'],mfilename)); return; end
+                    %                 try, conn_updatefilepaths; end
+                    %                 CONN_x.filename=filename;
+                    %                 conn_updatefolders;
+                end
 			end
             conn gui_setup;
 			
-		case {'gui_setup_save','gui_setup_saveas','gui_setup_saveas_nowarning'},
+		case {'gui_setup_save','gui_setup_saveas','gui_setup_savecont','gui_setup_saveas_nowarning'},
             varargout={false};
             saveas=false;
-            if strcmp(varargin{1},'gui_setup_saveas')
-                answ=conn_questdlg({'Warning: Using ''save as'' will create a copy of the current project with all','of the current project definitions but NONE of the analyses performed until now.','Do you wish to continue?'}, 'conn','Stop','Continue','Continue');
-                if ~strcmp(answ,'Continue'), return; end
-                saveas=true;
+            if 0, %strcmp(varargin{1},'gui_setup_savecont')
+%                 saveas=true; pathname=''; filename=varargin{2};
+%                 if ~isempty(filename)&&conn_existfile(filename)
+%                     tansw=conn_questdlg({'CONN project file already exist','Overwrite existing file?'},'','Yes','No','Yes');
+%                     if ~strcmp(tansw,'Yes'), filename=''; end
+%                 end
+            else
+                if strcmp(varargin{1},'gui_setup_saveas')
+                    answ=conn_questdlg({'Warning: Using ''save as'' will create a copy of the current project with all','of the current project definitions but NONE of the analyses performed until now.','Do you wish to continue?'}, 'conn','Stop','Continue','Continue');
+                    if ~strcmp(answ,'Continue'), return; end
+                    saveas=true;
+                end
+                if nargin<2||isempty(varargin{2}), strmsg='Save CONN project'; else strmsg=varargin{2}; end
+                if strcmp(varargin{1},'gui_setup_saveas') || strcmp(varargin{1},'gui_setup_saveas_nowarning') || isempty(CONN_x.filename) || ~ischar(CONN_x.filename),
+                    if isempty(CONN_x.filename)||~ischar(CONN_x.filename), filename='conn_project01.mat';
+                    else filename=CONN_x.filename;
+                    end
+                    if ~CONN_gui.isremote
+                        [filename,pathname]=uiputfile('conn_*.mat',strmsg,filename); saveas=true;
+                    else
+                        conn('gui_clear');
+                        thfig=uicontrol('units','norm','position',[0 0 .01 .01],'visible','off','userdata',0,'parent',CONN_h.screen.hfig);
+                        conn_menu('filesearchprojectsave',[],'CONN project name: ','*.mat',filename,{@(x)set(thfig,'userdata',x)});
+                        set(CONN_h.screen.hfig,'pointer','arrow');
+                        waitfor(thfig,'userdata');
+                        saveas=true; pathname='';filename='';
+                        if ~ishandle(thfig), return; end
+                        filename=get(thfig,'userdata');
+                        delete(thfig);
+                        if ~isempty(filename), filename=conn_prepend('',filename,'.mat'); end
+                        if ~isempty(filename)&&conn_existfile(filename)
+                            tansw=conn_questdlg({sprintf('CONN project file %s already exist',filename),'Overwrite existing file?'},'','Yes','No','Yes');
+                            if ~strcmp(tansw,'Yes'), filename=''; end
+                        end
+                    end
+                else pathname='';filename=CONN_x.filename;
+                end
             end
-            if nargin<2||isempty(varargin{2}), strmsg='Save CONN project'; else strmsg=varargin{2}; end
-			if strcmp(varargin{1},'gui_setup_saveas') || strcmp(varargin{1},'gui_setup_saveas_nowarning') || isempty(CONN_x.filename) || ~ischar(CONN_x.filename), if isempty(CONN_x.filename)||~ischar(CONN_x.filename), filename='conn_project01.mat'; else  filename=CONN_x.filename; end; [filename,pathname]=uiputfile('conn_*.mat',strmsg,filename); saveas=true;
-			else pathname='';filename=CONN_x.filename; end
-			if ischar(filename), 
+			if ischar(filename)&&~isempty(filename), 
                 if saveas, CONN_x.isready=[1 0 0 0]; end
                 set(CONN_h.screen.hfig,'pointer',CONN_gui.waiticon);
 				filename=fullfile(pathname,filename);
@@ -4777,11 +4957,11 @@ else
 				conn_menu('frame',boffset+[.05,.10,.15,.7],'Display volumes');
 				CONN_h.menus.m_setup_00{1}=conn_menu('listbox',boffset+[.06,.20,.12,.55],'Volumes','',['<HTML>Enter volumes for display in this list<br/> - click after the last item to add a new volume <br/> - ',CONN_gui.rightclick,'-click for additional options<br></HTML>'],'conn(''gui_display'',1);','conn(''gui_display'',8);');
 				CONN_h.menus.m_setup_00{2}=conn_menu('checkbox',boffset+[.06,.11,.02,.03],'Structural overlay','','<HTML>Shows thresholded data over reference structural background','conn(''gui_display'',2);');
-                CONN_h.menus.m_setup_00{3}=conn_menu('filesearch',[],'Select files','*.img; *.nii; *.mgh; *.mgz; *.annot; *.gz; *-1.dcm','',{@conn,'gui_display',3},'conn(''gui_display'',4);');
+                CONN_h.menus.m_setup_00{3}=conn_menu('filesearch',[],'Select files','*.img; *.nii; *.gii; *.mgh; *.mgz; *.annot; *.gz; *-1.dcm','',{@conn,'gui_display',3},'conn(''gui_display'',4);');
 				CONN_h.menus.m_setup_00{5}=conn_menu('image2',boffset+[.25,.10,.50,.8]);
                 set(CONN_h.menus.m_setup_00{3}.files,'max',2);
                 if ~isfield(CONN_x.Setup,'display'), CONN_x.Setup.display={}; end
-                hc1=uicontextmenu(CONN_h.screen.hfig);
+                hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                 uimenu(hc1,'Label','remove selected volume(s)','callback','conn(''gui_display'',8);');
                 uimenu(hc1,'Label','move selected volume(s) up','callback','conn(''gui_display'',9,''up'');');
                 uimenu(hc1,'Label','move selected volume(s) down','callback','conn(''gui_display'',9,''down'');');
@@ -4804,7 +4984,7 @@ else
                         temp=[];
                         for n1=1:size(filenames,1)
                             filename=fliplr(deblank(fliplr(deblank(filenames(n1,:)))));
-                            v=spm_vol(filename);
+                            v=conn_fileutils('spm_vol',filename);
                             if nvols==1
                                 [x,y,z]=ndgrid(1:v(1).dim(1),1:v(1).dim(2),1:v(1).dim(3));
                                 CONN_h.menus.m_setup.displayBxyz=v(1).mat*[x(:) y(:) z(:) ones(numel(x),1)]';
@@ -4813,7 +4993,7 @@ else
                                 CONN_h.menus.m_setup.displayBref=reshape(spm_get_data(CONN_gui.refs.canonical.V,pinv(CONN_gui.refs.canonical.V.mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim);
                             end
                             for n2=1:numel(v),
-                                temp=cat(4,temp,reshape(spm_get_data(v(n2),pinv(v(n2).mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim));
+                                temp=cat(4,temp,reshape(conn_fileutils('spm_get_data',v(n2),pinv(v(n2).mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim));
                             end
                         end
                         CONN_h.menus.m_setup.displayB{nvols}=temp;
@@ -4852,7 +5032,7 @@ else
                                 CONN_h.menus.m_setup.displayBref=reshape(spm_get_data(CONN_gui.refs.canonical.V,pinv(CONN_gui.refs.canonical.V.mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim);
                             end
                             for n2=1:numel(v),
-                                temp=cat(4,temp,reshape(spm_get_data(v(n2),pinv(v(n2).mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim));
+                                temp=cat(4,temp,reshape(conn_fileutils('spm_get_data',v(n2),pinv(v(n2).mat)*CONN_h.menus.m_setup.displayBxyz),CONN_h.menus.m_setup.displayBdim));
                             end
                             CONN_h.menus.m_setup.displayB{nvols(n1)}=temp/max(abs(temp(:)));
                         end
@@ -4921,7 +5101,10 @@ else
             boffset=[-.05 .0 0 0];
             if ~isfield(CONN_h.menus,'m_setup_import'), CONN_h.menus.m_setup_import='spm'; end
             if numel(varargin)>=2&&ischar(varargin{2}), 
-                if ~isempty(regexp(varargin{2},'^new')),
+                if ~isempty(regexp(varargin{2},'^reset')),
+                    CONN_h.menus.m_setup_import_isnew=true; 
+                    varargin{2}=regexprep(varargin{2},'^reset','new');
+                elseif ~isempty(regexp(varargin{2},'^new')),
                     CONN_h.menus.m_setup_import_isnew=true; 
                     if ~CONN_x.isready(1), Answ='Proceed';
                     else Answ=conn_questdlg({'Proceeding will close the current project and loose any unsaved progress','Do you want to proceed with creating a new project?'},'New project','Proceed','Cancel','Proceed');
@@ -4980,7 +5163,7 @@ else
                         CONN_h.menus.m_setup_00{16}=conn_menu('text',boffset+[.325,.30,.16,.09],'');
                         CONN_h.menus.m_setup_00{17}=conn_menu('text',boffset+[.51,.30,.16,.09],'');
                         CONN_h.menus.m_setup_00{9}=conn_menu('pushbuttonblue',boffset+[.3,.18,.10,.04],'','Import','<HTML>Imports SPM information into CONN Setup <b>for selected subject(s)</b></HTML>','conn(''gui_setup_import'',9)');
-                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.3,.14,.15,.04],'',{'import selected files','copy to local BIDS folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected functional files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to local BIDS folder</i> : selected functional files will be first copied to your local conn_*/data/BIDS folder and then imported into your CONN project <br/>(e.g. use this when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
+                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.3,.14,.15,.04],'',{'import selected files','copy to project BIDS folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected functional files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to project BIDS folder</i> : selected functional files will be first copied to your project conn_*/data/BIDS folder and then imported into your CONN project <br/>(e.g. use this when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
                         %'breakconditionsbysession',false,...
                         h=conn_menu('checkbox',boffset+[.45,.18,.02,.035],'functional volumes','','<HTML>When checked, source functional volumes (in SPM.xY.VY) will be imported in CONN Setup.functional (as Primary Dataset) for the selected subjects</HTML>');set(h,'value',1);CONN_h.menus.m_setup_00{11}=h;
                         h=conn_menu('checkbox',boffset+[.45,.14,.02,.035],'study conditions','','When checked, SPM conditions (in SPM.Sess.U) will be imported in CONN Setup.conditions for the selected subjects');set(h,'value',1);CONN_h.menus.m_setup_00{12}=h;
@@ -4997,7 +5180,7 @@ else
                             case 2,
                             case 3,
                                 if nargin<4, nsubs=get(CONN_h.menus.m_setup_00{1},'value'); else  nsubs=varargin{4}; end
-                                filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
+                                filename=fliplr(deblank(fliplr(deblank(char(varargin{3})))));
                                 txt=''; bak1=CONN_x.Setup.(CONN_h.menus.m_setup_import);
                                 strfiles='files';
                                 if size(filename,1)==length(nsubs)
@@ -5091,15 +5274,15 @@ else
                         %CONN_h.menus.m_setup_00{2}=conn_menu('edit',boffset+[.2,.7,.2,.04],'Number of subjects',num2str(CONN_x.Setup.nsubjects),'Number of subjects in this study','conn(''gui_setup_import'',2);');
                         CONN_h.menus.m_setup_00{3}=conn_menu('dicomfoldersearch',[],'Select DICOM root folder','Select','',{@conn,'gui_setup_import',3},'conn(''gui_setup_import'',4);');
                         CONN_h.menus.m_setup_00{4}=conn_menu('pushbutton', boffset+[.4,.7,.285,.09],'','','','conn(''gui_setup_import'',4)');
-                        CONN_h.menus.m_setup_00{5}=conn_menu('popup',boffset+[.42,.50,.27,.04],'',{'NIFTI output in DICOM root folder','NIFTI output in ../nii folder (nii subdirectory outside DICOM root folder)','NIFTI output in ./nii folder (nii subdirectory inside DICOM root folder)','NIFTI output in local BIDS folder','NIFTI output in user-defined folder'},'<HTML>Define where nifti files (named "run-#.nii"; one file for each complete DICOM series) are stored<br/> - note: when selecting <i>local BIDS</i> or <i>user-defined</i> options, folder names are auto-completed with a subject-specific "sub-#" subdirectory</HTML>','conn(''gui_setup_import'',5);');
+                        CONN_h.menus.m_setup_00{5}=conn_menu('popup',boffset+[.42,.50,.27,.04],'',{'NIFTI output in DICOM root folder','NIFTI output in ../nii folder (nii subdirectory outside DICOM root folder)','NIFTI output in ./nii folder (nii subdirectory inside DICOM root folder)','NIFTI output in project BIDS folder','NIFTI output in user-defined folder'},'<HTML>Define where nifti files (named "run-#.nii"; one file for each complete DICOM series) are stored<br/> - note: when selecting <i>local BIDS</i> or <i>user-defined</i> options, folder names are auto-completed with a subject-specific "sub-#" subdirectory</HTML>','conn(''gui_setup_import'',5);');
                         CONN_h.menus.m_setup_00{11}=conn_menu('pushbuttonblue',boffset+[.42,.55,.2,.04],'','Unpack DICOM now','Reads contents of selected DICOM folders and convert each DICOM series to a 4d NIFTI file','conn(''gui_setup_import'',11)');
                         CONN_h.menus.m_setup_00{6}=[];[CONN_h.menus.m_setup_00{6}(1) CONN_h.menus.m_setup_00{6}(2)]=conn_menu('listbox',boffset+[.35,.45,.345,.19],'DICOM series','',['<HTML>Select one or multiple DICOM series to display their contents and/or import them into CONN as functional/anatomical volumes<br/> - ',CONN_gui.rightclick,'-click for additional options</HTML>'],'conn(''gui_setup_import'',6)');
                         CONN_h.menus.m_setup_00{7}=conn_menu('image',boffset+[.37,.22,.305,.22]);
                         CONN_h.menus.m_setup_00{8}=conn_menu('popup',boffset+[.47,.14,.15,.04],'',{'as structural','as functional','as fieldmap'},'<HTML>Specify whether the selected DICOM series should be imported into CONN as structural or functional volumes<br/> - note: when selecting multiple DICOM series, the <i>as entire functional/structural data</i> option will automatically change the number of <br/>sessions per subject in your study to match the number of DICOM series selected</HTML>','conn(''gui_setup_import'',8)');
                         CONN_h.menus.m_setup_00{9}=conn_menu('pushbuttonblue',boffset+[.36,.14,.10,.04],'','Import','<HTML>Imports selected DICOM series as structural/functional data <b>for selected subject(s)</b></HTML>','conn(''gui_setup_import'',9)');
-                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.36,.09,.15,.05],'',{'import selected files','copy to local BIDS folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to local BIDS folder</i> : selected files will be first copied to your local conn_*/data/BIDS folder and then imported into your CONN project <br/>(e.g. use this when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
+                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.36,.09,.15,.05],'',{'import selected files','copy to project BIDS folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to project BIDS folder</i> : selected files will be first copied to your project conn_*/data/BIDS folder and then imported into your CONN project <br/>(e.g. use this when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
                         CONN_h.menus.m_setup_00{21}=uicontrol('style','frame','units','norm','position',boffset+[.30,.095,.40,.35],'foregroundcolor',CONN_gui.backgroundcolorA,'backgroundcolor',CONN_gui.backgroundcolorA,'parent',CONN_h.screen.hfig);
-                        hc1=uicontextmenu(CONN_h.screen.hfig);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                         uimenu(hc1,'Label','select suggested anatomical series','callback','conn(''gui_setup_import'',12,''isanat'');');
                         uimenu(hc1,'Label','select suggested functional series','callback','conn(''gui_setup_import'',12,''isfunc'');');
                         uimenu(hc1,'Label','select suggested fieldmap series','callback','conn(''gui_setup_import'',12,''isfmap'');');
@@ -5120,7 +5303,7 @@ else
                             case 2,
                             case 3,
                                 if nargin<4, nsubs=get(CONN_h.menus.m_setup_00{1},'value'); else  nsubs=varargin{4}; end
-                                filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
+                                filename=fliplr(deblank(fliplr(deblank(char(varargin{3})))));
                                 txt=''; bak1=CONN_x.Setup.(CONN_h.menus.m_setup_import);
                                 strfiles='folders';
                                 if size(filename,1)==length(nsubs)
@@ -5198,7 +5381,7 @@ else
                                 for isub=1:numel(nsubs)
                                     nsub=nsubs(isub);
                                     foldernames=CONN_x.Setup.dicom{nsub}{1};
-                                    if ischar(foldernames)&&isdir(deblank(foldernames(1,:))), foldernames=cellstr(foldernames);
+                                    if ischar(foldernames)&&conn_fileutils('isdir',deblank(foldernames(1,:))), foldernames=cellstr(foldernames);
                                     elseif ischar(foldernames), foldernames={cellstr(foldernames)};
                                     else foldernames=filenames;
                                     end
@@ -5213,8 +5396,8 @@ else
                                     pathname=CONN_h.menus.m_setup_import_dicom.folderout;
                                     if strcmp(lower(pathname),'bids'), pathname=fullfile(CONN_x.folders.bids,'sourcedata'); end
                                     if ~ismember(pathname,{'./','../nii','./nii'}),
-                                        [ok,msg]=mkdir(pathname);
-                                        pathname=fullfile(pathname,sprintf('sub-%04d',nsub)); [ok,msg]=mkdir(pathname);
+                                        conn_fileutils('mkdir',pathname);
+                                        pathname=fullfile(pathname,sprintf('sub-%04d',nsub)); conn_fileutils('mkdir',pathname);
                                     end
                                     if isempty(Series), conn_disp('fprintf','No DICOM files found in selected folder(s) for subject %d\n',nsub); 
                                     else
@@ -5341,13 +5524,14 @@ else
                             CONN_h.menus.m_setup_00{17}=conn_menu('image',boffset+[.51,.25,.16,.15],'');
                             CONN_h.menus.m_setup_00{18}=conn_menu('text',boffset+[.325,.40,.16,.15],'');
                             CONN_h.menus.m_setup_00{19}=conn_menu('text',boffset+[.51,.40,.16,.15],'');
-                            h=conn_menu('checkbox',boffset+[.45,.18,.02,.035],'structural volumes','','<HTML>When checked, source structural volumes (in sub-#/anat folders) will be imported in CONN Setup.structural for the selected subjects</HTML>');set(h,'value',1);CONN_h.menus.m_setup_00{11}=h;
-                            h=conn_menu('checkbox',boffset+[.45,.14,.02,.035],'functional volumes','','<HTML>When checked, source functional volumes (in sub-#/func folders) will be imported in CONN Setup.functional (as Primary Dataset) for the selected subjects</HTML>');set(h,'value',1);CONN_h.menus.m_setup_00{12}=h;
-                            h=conn_menu('checkbox',boffset+[.45,.10,.02,.035],'study conditions','','When checked, BIDS tasks (in _events.tsv files) will be imported in CONN Setup.conditions for the selected subjects');set(h,'value',1);CONN_h.menus.m_setup_00{13}=h;
+                            h=conn_menu('checkbox',boffset+[.50,.18,.02,.035],'structural volumes','','<HTML>When checked, source structural volumes (in sub-#/anat folders) will be imported in CONN Setup.structural for the selected subjects</HTML>');set(h,'value',1);CONN_h.menus.m_setup_00{11}=h;
+                            h=conn_menu('checkbox',boffset+[.50,.14,.02,.035],'functional volumes','','<HTML>When checked, source functional volumes (in sub-#/func folders) will be imported in CONN Setup.functional (as Primary Dataset) for the selected subjects</HTML>');set(h,'value',1);CONN_h.menus.m_setup_00{12}=h;
+                            h=conn_menu('checkbox',boffset+[.50,.10,.02,.035],'study conditions','','When checked, BIDS tasks (in _events.tsv files) will be imported in CONN Setup.conditions for the selected subjects');set(h,'value',1);CONN_h.menus.m_setup_00{13}=h;
                             CONN_h.menus.m_setup_00{9}=conn_menu('pushbuttonblue',boffset+[.3,.18,.10,.04],'','Import','Imports selected BIDS information into CONN Setup','conn(''gui_setup_import'',9)');
                         end
-                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.3,.14,.15,.04],'',{'import selected files','copy to local BIDS folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected structural/functional files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to local BIDS folder</i> : selected structural/functional files will be first copied to your local conn_*/data/BIDS folder and then imported into your CONN project <br/>(e.g. use this when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
-                        CONN_h.menus.m_setup_00{2}=conn_menu('popup',boffset+[.3,.10,.15,.04],'',{'import to all subjects','import to selected subjects'},'<HTML>Select <i>import to all subjects</i> to match the number of subjects in your current CONN study to the number of selected BIDS dataset subjects<br/>Select <i>import to selected subjects</i> to manually define the target subjects in your current CONN study where the selected BIDS dataset subjects will be imported to</HTML>','conn(''gui_setup_import'',2);');
+                        CONN_h.menus.m_setup_00{10}=conn_menu('popup',boffset+[.3,.14,.185,.04],'',{'import selected files','copy to project BIDS folder and import','copy to DERIVATIVES folder and import'},'<HTML>Controls behavior of ''Import'' button:<br/> - <i>import selected files</i> : (default) selected structural/functional files will be imported into your CONN project directly from their original locations/folders<br/> - <i>copy first to project BIDS folder</i> : selected structural/functional files will be first copied to your local conn project conn_*/data/BIDS/dataset/sub-* folders and then imported into your CONN project <br/> - <i>copy first to DERIVATIVES folder</i> : selected structural/functional files will be first copied to [BIDSROOT]/derivatives/conn/sub-* folder and then imported into your CONN project <br/>(e.g. use any of these last two options when importing data from read-only folders if the files need to be further modified, uncompressed, or processed)</HTML>');
+                        CONN_h.menus.m_setup_00{2}=conn_menu('popup',boffset+[.3,.10,.185,.04],'',{'import to all subjects','import to selected subjects'},'<HTML>Select <i>import to all subjects</i> to match the number of subjects in your current CONN study to the number of selected BIDS dataset subjects<br/>Select <i>import to selected subjects</i> to manually define the target subjects in your current CONN study where the selected BIDS dataset subjects will be imported to</HTML>','conn(''gui_setup_import'',2);');
+                        if CONN_h.menus.m_setup_import_isfmriprep, set(CONN_h.menus.m_setup_00{10},'value',3); end
                         %'breakconditionsbysession',false,...
                         %h=conn_menu('checkbox',boffset+[.56,.18,.02,.04],'BIDS covariates','','When checked, BIDS covariates (in SPM.Sess.C) will be imported in CONN as a first-level covariate named "BIDS covariates" for the selected subjects');set(h,'value',1);CONN_h.menus.m_setup_00{13}=h;
                         %h=conn_menu('checkbox',boffset+[.56,.14,.02,.04],'realignment covariates','','When checked, rp_[functional].txt files, if available, will be imported in CONN as a first-level covariate named "realignment" for the selected subjects');set(h,'value',0);CONN_h.menus.m_setup_00{14}=h;
@@ -5355,9 +5539,9 @@ else
                         if CONN_h.menus.m_setup_import_isfmriprep, CONN_h.menus.m_setup_00{21}=uicontrol('style','frame','units','norm','position',boffset+[.20,.09,.30,.69],'foregroundcolor',CONN_gui.backgroundcolorA,'backgroundcolor',CONN_gui.backgroundcolorA,'parent',CONN_h.screen.hfig);
                         else CONN_h.menus.m_setup_00{21}=uicontrol('style','frame','units','norm','position',boffset+[.20,.09,.50,.69],'foregroundcolor',CONN_gui.backgroundcolorA,'backgroundcolor',CONN_gui.backgroundcolorA,'parent',CONN_h.screen.hfig);
                         end
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',5,''manual'');');set(CONN_h.menus.m_setup_00{5},'uicontextmenu',hc1);
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',6,''manual'');');set(CONN_h.menus.m_setup_00{6},'uicontextmenu',hc1);
-                        hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',7,''manual'');');set(CONN_h.menus.m_setup_00{7},'uicontextmenu',hc1);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',5,''manual'');');set(CONN_h.menus.m_setup_00{5},'uicontextmenu',hc1);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',6,''manual'');');set(CONN_h.menus.m_setup_00{6},'uicontextmenu',hc1);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','manual filter','callback','conn(''gui_setup_import'',7,''manual'');');set(CONN_h.menus.m_setup_00{7},'uicontextmenu',hc1);
                         set(CONN_h.menus.m_setup_00{1}(1),'string',[repmat('Subject ',[CONN_x.Setup.nsubjects,1]),num2str((1:CONN_x.Setup.nsubjects)')],'max',2);
                         set(CONN_h.menus.m_setup_00{3}.files,'max',2);
                         set([CONN_h.menus.m_setup_00{5},CONN_h.menus.m_setup_00{6},CONN_h.menus.m_setup_00{7}],'max',2);
@@ -5369,22 +5553,41 @@ else
                             case 1,
                             case 2,
                             case 3,
-                                if nargin<4, nsubs=get(CONN_h.menus.m_setup_00{1},'value'); else  nsubs=varargin{4}; end
+                                %if nargin<4, nsubs=get(CONN_h.menus.m_setup_00{1},'value'); else  nsubs=varargin{4}; end
+                                if nargin>=4&&isequal(varargin{4},'-nogui'), nogui=true; else nogui=false; end
                                 filename=fliplr(deblank(fliplr(deblank(varargin{3}))));
                                 txt=''; bak1=CONN_x.Setup.(CONN_h.menus.m_setup_import);
                                 CONN_x.Setup.bids=conn_file(filename);
-                                ht=conn_msgbox({'Analyzing root folder contents. For large datasets this process','may take several minutes. Please wait...'},'',-1);
+                                if nogui, ht=[]; fprintf('Analyzing root folder contents. For large datasets this process may take several minutes. Please wait...\n');
+                                else ht=conn_msgbox({'Analyzing root folder contents. For large datasets this process','may take several minutes. Please wait...'},'',-1); 
+                                end
                                 dataset=conn_bidsdir(CONN_x.Setup.bids{1});
                                 if isempty(dataset)
                                     CONN_x.Setup.(CONN_h.menus.m_setup_import)=bak1;
                                     conn_msgbox('No matching sub-* files found in BIDS directory. Skipping import','',2);
                                 else
                                     txt=sprintf('%d folders selected (%d matching files)\n',size(filename,1),numel(dataset.data.file));
-                                    if ~isempty(txt)&&strcmp(conn_questdlg(txt,'','Ok','Undo','Ok'),'Undo'), CONN_x.Setup.(CONN_h.menus.m_setup_import)=bak1;
+                                    if nogui, fprintf('%s\n',txt); end
+                                    if ~nogui&&~isempty(txt)&&strcmp(conn_questdlg(txt,'','Ok','Undo','Ok'),'Undo'), CONN_x.Setup.(CONN_h.menus.m_setup_import)=bak1;
                                     else
                                         if CONN_h.menus.m_setup_import_isfmriprep, 
                                             if 0, space='#EMPTY'; 
-                                            else space=''; for n={'MNI152NLin2009cAsym','T1w'}, if any(ismember(dataset.dict.space,n{1})), space=n{1}; break; end; end; if isempty(space)&&~isempty(dataset.dict.space), space=dataset.dict.space{1}; end; 
+                                            elseif 0, space=''; for n={'MNI152NLin2009cAsym','T1w'}, if any(ismember(dataset.dict.space,n{1})), space=n{1}; break; end; end; if isempty(space)&&~isempty(dataset.dict.space), space=dataset.dict.space{1}; end; 
+                                            else
+                                                space='';
+                                                desc=''; for n={'preproc'}, if any(ismember(dataset.dict.desc,n{1})), desc=n{1}; break; end; end; if isempty(desc)&&~isempty(dataset.dict.desc), desc=dataset.dict.desc{1}; end
+                                                Nsubs=zeros(1,numel(dataset.dict.space));
+                                                for n=1:numel(dataset.dict.space)
+                                                    space=dataset.dict.space{n};
+                                                    dataset_anat=conn_bidsdir(dataset,'sub',dataset.dict.sub,'folder',{'anat'},'format',{'nii','nii.gz'},'desc',desc,'space',space);
+                                                    dataset_func=conn_bidsdir(dataset,'sub',dataset.dict.sub,'folder',{'func'},'format',{'nii','nii.gz'},'contents','bold','desc',desc,'space',space);
+                                                    Nsubs(n)=numel(intersect(dataset_anat.dict.sub,dataset_func.dict.sub));
+                                                end
+                                                Nvalid=find(Nsubs>0); % keeps only space entries with >0 subjects
+                                                if numel(Nvalid)>1&&any(strcmp(dataset.dict.space(Nvalid),'MNI152NLin2009cAsym')), Nvalid=Nvalid(strcmp(dataset.dict.space(Nvalid),'MNI152NLin2009cAsym')); end % prefers MNI152NLin2009cAsym space
+                                                if numel(Nvalid)>1, Nvalid=Nvalid(Nsubs==max(Nsubs)); end % alternatively, select space with maximum number of subjects
+                                                if numel(Nvalid)>1&&any(strcmp(dataset.dict.space(Nvalid),'T1w')), Nvalid=Nvalid(strcmp(dataset.dict.space(Nvalid),'T1w')); end % alternatively, T1w space
+                                                if numel(Nvalid)==1, space=dataset.dict.space{Nvalid}; end
                                             end
                                             desc=''; for n={'preproc'}, if any(ismember(dataset.dict.desc,n{1})), desc=n{1}; break; end; end; if isempty(desc)&&~isempty(dataset.dict.desc), desc=dataset.dict.desc{1}; end
                                             dataset_anat=conn_bidsdir(dataset,'sub',dataset.dict.sub,'folder',{'anat'},'format',{'nii','nii.gz'},'desc',desc,'space',space);
@@ -5469,6 +5672,7 @@ else
                                 CONN_x.Setup.bids{3}=info;
                             case 8, % bids select other category
                             case 9, % import
+                                if nargin>=3&&isequal(varargin{3},'-nogui'), nogui=true; else nogui=false; end
                                 nsubs=get(CONN_h.menus.m_setup_00{1}(1),'value');
                                 allsubjects=isequal(get(CONN_h.menus.m_setup_00{2},'value'),1);
                                 if allsubjects, nsubs=[]; end
@@ -5508,26 +5712,29 @@ else
                                 if bids_docond, txt{end+1}=sprintf('import study conditions'); end
                                 nset=0; 
                                 localcopy=isequal(get(CONN_h.menus.m_setup_00{10},'value'),2);
-                                if ~isempty(txt)
+                                copytoderiv=isequal(get(CONN_h.menus.m_setup_00{10},'value'),3);
+                                if ~nogui&&~isempty(txt)
                                     answ=conn_questdlg([txt,{'','Proceed with importing?'}],'','Ok','Cancel','Ok');
                                     if ~strcmp(answ,'Ok'), return; end
                                 end
-                                hm=conn_msgbox('Importing data... please wait','');
+                                if nogui, hm=[]; fprintf('Importing data... please wait\n');
+                                else hm=conn_msgbox('Importing data... please wait','');
+                                end
                                 ERR={};
                                 if allsubjects&&bids_docond
                                     CONN_x.Setup.conditions.names={' '};
-                                    CONN_x.Setup.conditions.values={};
-                                    CONN_x.Setup.conditions.model={};
-                                    CONN_x.Setup.conditions.param=[];
-                                    CONN_x.Setup.conditions.filter={};
+                                    CONN_x.Setup.conditions.values={{{{[],[]}}}}; 
+                                    CONN_x.Setup.conditions.model={[]};
+                                    CONN_x.Setup.conditions.param=0;
+                                    CONN_x.Setup.conditions.filter={[]};
                                 end
                                 if allsubjects&&CONN_h.menus.m_setup_import_isfmriprep
                                     CONN_x.Setup.l1covariates.names={' '};
-                                    CONN_x.Setup.l1covariates.files={};
+                                    CONN_x.Setup.l1covariates.files={{{{[],[],[]}}}};
                                 end
-                                if bids_dofunc, [ok,err]=conn_importbids(info.dataset_select.func.data.file,'type','functional','subjects',nsubs,'subjects_id',bids_subj_id,'nset',nset,'localcopy',localcopy); ERR=[ERR err]; end
-                                if bids_doanat, [ok,err]=conn_importbids(info.dataset_select.anat.data.file,'type','structural','subjects',nsubs,'subjects_id',bids_subj_id,'localcopy',localcopy);  ERR=[ERR err]; end
-                                if bids_docond, [ok,err]=conn_importbids(info.dataset_select.func.data.file,'type','conditions','subjects',nsubs,'subjects_id',bids_subj_id);  ERR=[ERR err]; end
+                                if bids_dofunc, [ok,err]=conn_importbids(info.dataset_select.func.data.file,'type','functional','subjects',nsubs,'subjects_id',bids_subj_id,'nset',nset,'localcopy',localcopy,'copytoderiv',copytoderiv); ERR=[ERR err]; end
+                                if bids_doanat, [ok,err]=conn_importbids(info.dataset_select.anat.data.file,'type','structural','subjects',nsubs,'subjects_id',bids_subj_id,'localcopy',localcopy,'copytoderiv',copytoderiv);  ERR=[ERR err]; end
+                                if bids_docond, [ok,err]=conn_importbids(info.dataset_select.func.data.file,'type','conditions','subjects',nsubs,'subjects_id',bids_subj_id,'copytoderiv',copytoderiv);  ERR=[ERR err]; end
                                 if CONN_h.menus.m_setup_import_isfmriprep, 
                                     for nl1covariates=1:numel(CONN_x.Setup.l1covariates.names)-1, % fill empty values
                                         for nsub=nsubs(:)',
@@ -5545,9 +5752,14 @@ else
                                 end
                                 if ishandle(hm), close(hm); end
                                 if isempty(ERR),
-                                    conn_msgbox(sprintf('Finished importing %d subjects data without errors',numel(nsubs)),'conn',1);
+                                    if nogui, fprintf('Finished importing %d subjects data without errors',numel(nsubs));
+                                    else conn_msgbox(sprintf('Finished importing %d subjects data without errors',numel(nsubs)),'conn',1);
+                                    end
                                     conn gui_setup;
                                     return
+                                elseif nogui, 
+                                    disp(char(ERR));
+                                    error('Erros found during import');
                                 else
                                     conn_msgbox([{'Some errors found during import. Please revise'},ERR],'conn',2);
                                 end
@@ -5772,10 +5984,10 @@ else
                 %CONN_h.menus.m_preproc_00{21}=uicontrol('style','text','units','norm','position',boffset+[.48,.47,.215,.04],'string','voxel-to-voxel r','backgroundcolor',CONN_gui.backgroundcolorA,'foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset);
 				[CONN_h.menus.m_preproc_00{23},CONN_h.menus.m_preproc_00{24}]=conn_menu('scatter',boffset+[.50,.36,.175,.205]);
                 CONN_h.menus.m_preproc_00{25}=uicontrol('style','text','units','norm','position',boffset+[.49,.31,.195,.04],'string','voxel-to-voxel connectivity (r)','backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset,'parent',CONN_h.screen.hfig);
-                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.19,.08,.04],'string','original','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',.75/2*[1,1,1],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
-                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.12,.08,.04],'string','after denoising','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',1/2*[1,1,0],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
-                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.06,.08,.04],'string','GS original','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',.75/2*[1,1,1],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
-                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.03,.08,.04],'string','GS after denoising','fontsize',8+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',1/2*[1,1,0],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
+                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.19,.08,.04],'string','original','fontsize',6+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',.75/2*[1,1,1],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
+                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.12,.08,.04],'string','after denoising','fontsize',6+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',1/2*[1,1,0],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
+                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.06,.08,.04],'string','GS original','fontsize',6+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',.75/2*[1,1,1],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
+                uicontrol('style','text','units','norm','position',boffset+[.50+.18,.03,.08,.04],'string','GS after denoising','fontsize',6+CONN_gui.font_offset,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',1/2*[1,1,0],'horizontalalignment','left','parent',CONN_h.screen.hfig); 
                 
                 set(CONN_h.menus.m_preproc_00{23}.h2,'markersize',1);set(CONN_h.menus.m_preproc_00{23}.h1,'ydir','reverse','yaxislocation','right','xtick',-1:.5:1,'xticklabel',[]);ylabel(CONN_h.menus.m_preproc_00{23}.h1,'voxel-to-voxel distance (mm)','fontsize',8+CONN_gui.font_offset);
                 %CONN_h.menus.m_preproc_00{25}=uicontrol('style','text','units','norm','position',boffset+[.73,.03,.185,.04],'string','voxel-to-voxel dist (mm)','backgroundcolor',CONN_gui.backgroundcolorA,'foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset);
@@ -5837,8 +6049,8 @@ else
                 filepath=CONN_x.folders.data;
                 if any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
                     filename=fullfile(filepath,['DATA_Subject',num2str(1,'%03d'),'_Session',num2str(1,'%03d'),'.mat']);
-                    if isempty(dir(filename)), conn_msgbox({'Not ready to start Denoising step',' ','Please complete the Setup step first','(fill any required information and press "Done" in the Setup tab)'},'',2); return; end %conn gui_setup; return; end
-                    CONN_h.menus.m_preproc.Y=conn_vol(filename);
+                    if ~conn_existfile(filename), conn_msgbox({'Not ready to start Denoising step',' ','Please complete the Setup step first','(fill any required information and press "Done" in the Setup tab)'},'',2); return; end %conn gui_setup; return; end
+                    CONN_h.menus.m_preproc.Y=conn_vol(filename,true);
                     if isfield(CONN_h.menus.m_preproc.Y,'issurface')&&CONN_h.menus.m_preproc.Y.issurface,%isequal(CONN_h.menus.m_preproc.Y.matdim.dim,conn_surf_dims(8).*[1 1 2])
                         CONN_h.menus.m_preproc.y.slice=1;
                         if CONN_h.menus.m_preproc_surfhires
@@ -5858,18 +6070,18 @@ else
                 end
                 CONN_h.menus.m_preproc.strlabel=sprintf('Subject %d session %d',1,1);
 				filename=fullfile(filepath,['ROI_Subject',num2str(1,'%03d'),'_Session',num2str(1,'%03d'),'.mat']);
-				CONN_h.menus.m_preproc.X1=load(filename);
+				CONN_h.menus.m_preproc.X1=conn_loadmatfile(filename,'-cache');
 				filename=fullfile(filepath,['COV_Subject',num2str(1,'%03d'),'_Session',num2str(1,'%03d'),'.mat']);
-				CONN_h.menus.m_preproc.X2=load(filename);
+				CONN_h.menus.m_preproc.X2=conn_loadmatfile(filename,'-cache');
                 if any(CONN_x.Setup.steps([2,3]))
                     if ~(isfield(CONN_h.menus.m_preproc.Y,'issurface')&&CONN_h.menus.m_preproc.Y.issurface)
                         try
-                            CONN_h.menus.m_preproc.XS=spm_vol(deblank(CONN_x.Setup.structural{1}{1}{1}));
+                            CONN_h.menus.m_preproc.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{1}{1}{1}));
                         catch
                             CONN_h.menus.m_preproc.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
                         end
                         xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))*(CONN_h.menus.m_preproc.y.slice-1)+(1:prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))),CONN_h.menus.m_preproc.Y.matdim.mat,CONN_h.menus.m_preproc.Y.matdim.dim);
-                        CONN_h.menus.m_preproc.Xs=spm_get_data(CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
+                        CONN_h.menus.m_preproc.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
                         CONN_h.menus.m_preproc.Xs=permute(reshape(CONN_h.menus.m_preproc.Xs,CONN_h.menus.m_preproc.Y.matdim.dim(1:2)),[2,1,3]);
                         set(CONN_h.menus.m_preproc_00{15},'min',1,'max',CONN_h.menus.m_preproc.Y.matdim.dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_preproc.Y.matdim.dim(3)-1)),'value',CONN_h.menus.m_preproc.y.slice);
                     else
@@ -5989,7 +6201,7 @@ else
                          filepath=CONN_x.folders.data;
                          if any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
                              filename=fullfile(filepath,['DATA_Subject',num2str(nsubs,'%03d'),'_Session',num2str(nsess,'%03d'),'.mat']);
-                             CONN_h.menus.m_preproc.Y=conn_vol(filename);
+                             CONN_h.menus.m_preproc.Y=conn_vol(filename,true);
                              if isfield(CONN_h.menus.m_preproc.Y,'issurface')&&CONN_h.menus.m_preproc.Y.issurface
                                  if CONN_h.menus.m_preproc_surfhires
                                      [CONN_h.menus.m_preproc.y.data,CONN_h.menus.m_preproc.y.idx]=conn_get_volume(CONN_h.menus.m_preproc.Y);
@@ -6005,18 +6217,18 @@ else
                          end
                          CONN_h.menus.m_preproc.strlabel=sprintf('Subject %d session %d',nsubs,nsess);
 						 filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Session',num2str(nsess,'%03d'),'.mat']);
-						 CONN_h.menus.m_preproc.X1=load(filename);
+						 CONN_h.menus.m_preproc.X1=conn_loadmatfile(filename);
 						 filename=fullfile(filepath,['COV_Subject',num2str(nsubs,'%03d'),'_Session',num2str(nsess,'%03d'),'.mat']);
-						 CONN_h.menus.m_preproc.X2=load(filename);
+						 CONN_h.menus.m_preproc.X2=conn_loadmatfile(filename);
                          if any(CONN_x.Setup.steps([2,3]))&&~(isfield(CONN_h.menus.m_preproc.Y,'issurface')&&CONN_h.menus.m_preproc.Y.issurface)
                              if ~CONN_x.Setup.structural_sessionspecific, nsesstemp=1; else nsesstemp=nsess; end
                              try
-                                 CONN_h.menus.m_preproc.XS=spm_vol(deblank(CONN_x.Setup.structural{nsubs}{nsesstemp}{1}));
+                                 CONN_h.menus.m_preproc.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{nsubs}{nsesstemp}{1}));
                              catch
                                  CONN_h.menus.m_preproc.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
                              end
                              xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))*(CONN_h.menus.m_preproc.y.slice-1)+(1:prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))),CONN_h.menus.m_preproc.Y.matdim.mat,CONN_h.menus.m_preproc.Y.matdim.dim);
-                             CONN_h.menus.m_preproc.Xs=spm_get_data(CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
+                             CONN_h.menus.m_preproc.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
                              CONN_h.menus.m_preproc.Xs=permute(reshape(CONN_h.menus.m_preproc.Xs,CONN_h.menus.m_preproc.Y.matdim.dim(1:2)),[2,1,3]);
                          end
 						 model=1;
@@ -6028,7 +6240,7 @@ else
                          if any(CONN_x.Setup.steps([2,3]))&&~(isfield(CONN_h.menus.m_preproc.Y,'issurface')&&CONN_h.menus.m_preproc.Y.issurface)
                              [CONN_h.menus.m_preproc.y.data,CONN_h.menus.m_preproc.y.idx]=conn_get_slice(CONN_h.menus.m_preproc.Y,CONN_h.menus.m_preproc.y.slice);
                              xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))*(CONN_h.menus.m_preproc.y.slice-1)+(1:prod(CONN_h.menus.m_preproc.Y.matdim.dim(1:2))),CONN_h.menus.m_preproc.Y.matdim.mat,CONN_h.menus.m_preproc.Y.matdim.dim);
-                             CONN_h.menus.m_preproc.Xs=spm_get_data(CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
+                             CONN_h.menus.m_preproc.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_preproc.XS(1),pinv(CONN_h.menus.m_preproc.XS(1).mat)*xyz');
                              CONN_h.menus.m_preproc.Xs=permute(reshape(CONN_h.menus.m_preproc.Xs,CONN_h.menus.m_preproc.Y.matdim.dim(1:2)),[2,1,3]);
                          end
                          model=1;
@@ -6534,7 +6746,7 @@ else
                             elseif ismember(tanalysis,'temporal modulation')
                                 filepath=CONN_x.folders.preprocessing;
                                 filename=fullfile(filepath,['ROI_Subject',num2str(1,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(1),'%03d'),'.mat']);
-                                tempX1=load(filename);
+                                tempX1=conn_loadmatfile(filename,'names');
                                 value=listdlg('liststring',tempX1.names,'selectionmode','single','initialvalue',value,'promptstring','Select interaction factor','ListSize',[300 200]);
                                 if isempty(value), tmodulation='';
                                 else tmodulation=tempX1.names{value};
@@ -6580,10 +6792,15 @@ else
                             txt{1}=regexprep(txt{1},'[^\w\d_]','');
                             if isempty(txt{1}), break; end
                             if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                if isempty(tnames{state(1)}), [ok,nill]=mkdir(tfolders{state(1)},txt{1});
-                                elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolders{state(1)},tnames{state(1)}),fullfile(tfolders{state(1)},txt{1}))); ok=isequal(ok,0);
-                                else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolders{state(1)},tnames{state(1)}),fullfile(tfolders{state(1)},txt{1}))); ok=isequal(ok,0);
+                                try
+                                    if isempty(tnames{state(1)}), assert(conn_fileutils('mkdir',tfolders{state(1)},txt{1}));
+                                    else conn_fileutils('renamefile',fullfile(tfolders{state(1)},tnames{state(1)}),fullfile(tfolders{state(1)},txt{1}));
+                                    end
+                                    ok=true;
                                 end
+                                %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolders{state(1)},tnames{state(1)}),fullfile(tfolders{state(1)},txt{1}))); ok=isequal(ok,0);
+                                %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolders{state(1)},tnames{state(1)}),fullfile(tfolders{state(1)},txt{1}))); ok=isequal(ok,0);
+                                %end
                                 if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                             else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                             end
@@ -6744,28 +6961,32 @@ else
                 CONN_h.menus.m_analyses.icondition=icondition;
                 filepath=CONN_x.folders.preprocessing;
                 filename=fullfile(filepath,['DATA_Subject',num2str(1,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(1),'%03d'),'.mat']);
-                if conn_existfile(filename)&any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
-                    CONN_h.menus.m_analyses.Y=conn_vol(filename);
+                if conn_existfile(filename)&any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly, % load slice
+                    CONN_h.menus.m_analyses.Y=conn_vol(filename,true);
                     if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface, %isequal(CONN_h.menus.m_analyses.Y.matdim.dim,conn_surf_dims(8).*[1 1 2])
                         CONN_h.menus.m_analyses.y.slice=1;
-                        if CONN_h.menus.m_analyses_surfhires
-                            [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
-                        else
-                            [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
-                            [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
-                            CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
-                            CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
-                        end
+                        CONN_h.menus.m_analyses.y.data=[];
+%                         if CONN_h.menus.m_analyses_surfhires
+%                             [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
+%                         else
+%                             [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
+%                             [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
+%                             CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
+%                             CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
+%                         end
                         set(CONN_h.menus.m_analyses_00{15},'visible','off');
                         conn_menumanager('onregionremove',CONN_h.menus.m_analyses_00{15});
                     else
+                        CONN_h.menus.m_analyses.y.data=[];
                         CONN_h.menus.m_analyses.y.slice=ceil(CONN_h.menus.m_analyses.Y.matdim.dim(3)/2);
-                        [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+%                         [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
                     end
                 end
-                filename=fullfile(filepath,['ROI_Subject',num2str(1,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(1),'%03d'),'.mat']);
-                if conn_existfile(filename)&any(CONN_x.Setup.steps([2,3]))
-                    CONN_h.menus.m_analyses.X1=load(filename);
+                CONN_h.menus.m_analyses.X1=[];
+                if state(1)==1
+                    filename=fullfile(filepath,['ROI_Subject',num2str(1,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(1),'%03d'),'.mat']);
+                    if conn_existfile(filename), CONN_h.menus.m_analyses.X1=conn_loadmatfile(filename,'names','data','crop','xyz','source','conditionname','conditionweights'); CONN_h.menus.m_analyses.X1.filename=filename; end
+                end
                     %CONN_h.menus.m_analyses.x.data=CONN_h.menus.m_analyses.X1.data
                     %                     CONN_h.menus.m_analyses.ConditionWeights={};
                     %                     for ncondition=1:nconditions,
@@ -6777,15 +6998,17 @@ else
                     %                             end
                     %                         end
                     %                     end
+                if any(CONN_x.Setup.steps([2,3]))&&isfield(CONN_h.menus.m_analyses,'Y')
                     if ~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
                         try
-                            CONN_h.menus.m_analyses.XS=spm_vol(deblank(CONN_x.Setup.structural{1}{1}{1}));
+                            CONN_h.menus.m_analyses.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{1}{1}{1}));
                         catch
                             CONN_h.menus.m_analyses.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
                         end
-                        xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                        CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
-                        CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                        CONN_h.menus.m_analyses.Xs=[];
+                        %                             xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+                        %                             CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+                        %                             CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
                         set(CONN_h.menus.m_analyses_00{15},'min',1,'max',CONN_h.menus.m_analyses.Y.matdim.dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_analyses.Y.matdim.dim(3)-1)),'value',CONN_h.menus.m_analyses.y.slice);
                     else
                         CONN_h.menus.m_analyses.y.slice=max(1,min(4,CONN_h.menus.m_analyses.y.slice));
@@ -6856,7 +7079,7 @@ else
 %                     CONN_h.menus.m_analyses_00{29}=conn_menu('image2',boffset+pos+[.02 -.20 -.02 -pos(4)+.07],'voxel BOLD timeseries');
                     
                     %conn_menu('frame',[2*.91/4,.89,.91/4,.05],'');
-                    if ~isfield(CONN_x.Analyses(ianalysis).variables,'names')||isempty(CONN_x.Analyses(ianalysis).variables.names), 
+                    if ~isfield(CONN_x.Analysis_variables,'names')||isempty(CONN_x.Analysis_variables.names), 
                         conn_msgbox({'Not ready to start first-level Analysis step',' ','Please complete the Denoising step first','(fill any required information and press "Done" in the Denoising tab)'},'',2); 
                         CONN_h.menus.m_analyses.isready=false;
                     else
@@ -6873,8 +7096,8 @@ else
                     set(CONN_h.menus.m_analyses_00{8},'value',CONN_x.Analyses(ianalysis).weight);
                     set(CONN_h.menus.m_analyses_00{9},'value',CONN_x.Analyses(ianalysis).type);
                     set([CONN_h.menus.m_analyses_00{1},CONN_h.menus.m_analyses_00{2}],'max',2);
-                    tnames=CONN_x.Analyses(ianalysis).variables.names;
-                    tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
+                    tnames=CONN_x.Analysis_variables.names;
+                    tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
                     set(CONN_h.menus.m_analyses_00{1},'string',tnames);
                     set(CONN_h.menus.m_analyses_00{2},'string',CONN_x.Analyses(ianalysis).regressors.names);
                     %conn_menumanager(CONN_h.menus.m_analyses_01,'on',1);
@@ -6896,18 +7119,18 @@ else
                                 case '<',
                                     ncovariates=get(CONN_h.menus.m_analyses_00{1},'value');
                                     for ncovariate=ncovariates(:)',
-                                        if isempty(strmatch(CONN_x.Analyses(ianalysis).variables.names{ncovariate},CONN_x.Analyses(ianalysis).regressors.names,'exact')),
-                                            CONN_x.Analyses(ianalysis).regressors.names{end+1}=CONN_x.Analyses(ianalysis).variables.names{ncovariate};
-                                            CONN_x.Analyses(ianalysis).regressors.types{end+1}=CONN_x.Analyses(ianalysis).variables.types{ncovariate};
-                                            CONN_x.Analyses(ianalysis).regressors.deriv{end+1}=CONN_x.Analyses(ianalysis).variables.deriv{ncovariate};
-                                            CONN_x.Analyses(ianalysis).regressors.fbands{end+1}=CONN_x.Analyses(ianalysis).variables.fbands{ncovariate};
-                                            CONN_x.Analyses(ianalysis).regressors.dimensions{end+1}=CONN_x.Analyses(ianalysis).variables.dimensions{ncovariate};
+                                        if isempty(strmatch(CONN_x.Analysis_variables.names{ncovariate},CONN_x.Analyses(ianalysis).regressors.names,'exact')),
+                                            CONN_x.Analyses(ianalysis).regressors.names{end+1}=CONN_x.Analysis_variables.names{ncovariate};
+                                            CONN_x.Analyses(ianalysis).regressors.types{end+1}=CONN_x.Analysis_variables.types{ncovariate};
+                                            CONN_x.Analyses(ianalysis).regressors.deriv{end+1}=CONN_x.Analysis_variables.deriv{ncovariate};
+                                            CONN_x.Analyses(ianalysis).regressors.fbands{end+1}=CONN_x.Analysis_variables.fbands{ncovariate};
+                                            CONN_x.Analyses(ianalysis).regressors.dimensions{end+1}=CONN_x.Analysis_variables.dimensions{ncovariate};
                                         end
                                     end
                                     set(CONN_h.menus.m_analyses_00{2},'string',CONN_x.Analyses(ianalysis).regressors.names);
                                     %set(CONN_h.menus.m_analyses_00{13},'string',{' TOTAL',CONN_x.Analyses(ianalysis).regressors.names{:}});
-                                    tnames=CONN_x.Analyses(ianalysis).variables.names;
-                                    tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
+                                    tnames=CONN_x.Analysis_variables.names;
+                                    tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
                                     set(CONN_h.menus.m_analyses_00{1},'string',tnames);
                                 case '>',
                                     ncovariates=get(CONN_h.menus.m_analyses_00{2},'value');
@@ -6919,8 +7142,8 @@ else
                                     CONN_x.Analyses(ianalysis).regressors.dimensions={CONN_x.Analyses(ianalysis).regressors.dimensions{idx}};
                                     set(CONN_h.menus.m_analyses_00{2},'string',CONN_x.Analyses(ianalysis).regressors.names,'value',min(max(ncovariates),length(CONN_x.Analyses(ianalysis).regressors.names)));
                                     %set(CONN_h.menus.m_analyses_00{13},'string',{' TOTAL',CONN_x.Analyses(ianalysis).regressors.names{:}},'value',min(max(get(CONN_h.menus.m_analyses_00{13},'value')),length(CONN_x.Analyses(ianalysis).regressors.names)+1));
-                                    tnames=CONN_x.Analyses(ianalysis).variables.names;
-                                    tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analyses(ianalysis).variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
+                                    tnames=CONN_x.Analysis_variables.names;
+                                    tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names))=cellfun(@(x)[CONN_gui.parse_html{1},x,CONN_gui.parse_html{2}],tnames(ismember(CONN_x.Analysis_variables.names,CONN_x.Analyses(ianalysis).regressors.names)),'uni',0);
                                     set(CONN_h.menus.m_analyses_00{1},'string',tnames);
                             end
                             model=1;
@@ -6950,18 +7173,18 @@ else
                         case 5,
                             nregressors=get(CONN_h.menus.m_analyses_00{2},'value');
                             value=get(CONN_h.menus.m_analyses_00{5},'value');
-                            if ~isfield(CONN_h.menus.m_analyses.X1,'fbdata')
-                                answ=conn_questdlg({'To use this feature you need to first re-run the ROI-based Denoising step.','Do you want to do this now?'},'','Yes','No','Yes');
-                                if strcmp(answ,'Yes'),
-                                    conn_process('preprocessing_roi');
-                                    nsubs=get(CONN_h.menus.m_analyses_00{11},'value');
-                                    nconditions=CONN_h.menus.m_analyses.listedconditions(get(CONN_h.menus.m_analyses_00{12},'value'));
-                                    filepath=CONN_x.folders.preprocessing;
-                                    filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                                    CONN_h.menus.m_analyses.X1=load(filename);
-                                else value=1;
-                                end
-                            end
+%                             if ~isfield(CONN_h.menus.m_analyses.X1,'fbdata')
+%                                 answ=conn_questdlg({'To use this feature you need to first re-run the ROI-based Denoising step.','Do you want to do this now?'},'','Yes','No','Yes');
+%                                 if strcmp(answ,'Yes'),
+%                                     conn_process('preprocessing_roi');
+%                                     nsubs=get(CONN_h.menus.m_analyses_00{11},'value');
+%                                     nconditions=CONN_h.menus.m_analyses.listedconditions(get(CONN_h.menus.m_analyses_00{12},'value'));
+%                                     filepath=CONN_x.folders.preprocessing;
+%                                     filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
+%                                     CONN_h.menus.m_analyses.X1=conn_loadmatfile(filename); CONN_h.menus.m_analyses.X1.filename=filename; 
+%                                 else value=1;
+%                                 end
+%                             end
                             if value>1
                                 answ=num2str(max([1 CONN_x.Analyses(ianalysis).regressors.fbands{:}]));
                                 answ=inputdlg('Number of frequency bands','',1,{answ});
@@ -6972,7 +7195,7 @@ else
                                 end
                             end
                             for nregressor=nregressors(:)',
-                                CONN_x.Analyses(ianalysis).regressors.fbands{nregressor}=max(1,min(numel(CONN_h.menus.m_analyses.X1.fbdata{1}),round(value)));
+                                CONN_x.Analyses(ianalysis).regressors.fbands{nregressor}=max(1,min(8,round(value))); %max(1,min(numel(CONN_h.menus.m_analyses.X1.fbdata{1}),round(value)));
                             end
                             model=1;
                         case 6,
@@ -7024,7 +7247,7 @@ else
                                 end
                                 filename=fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name,['dyn_Subject',num2str(1,'%03d'),'.mat']);
                                 try
-                                    load(filename,'names');
+                                    names={}; conn_loadmatfile(filename,'names');
                                     if ischar(CONN_x.Analyses(ianalysis).modulation)
                                         [nill,name]=fileparts(CONN_x.Analyses(ianalysis).modulation);
                                         [ok,value]=ismember(name,names);
@@ -7082,48 +7305,52 @@ else
                             if any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
 								set(CONN_h.screen.hfig,'pointer',CONN_gui.waiticon); drawnow;
                                 filename=fullfile(filepath,['DATA_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                                CONN_h.menus.m_analyses.Y=conn_vol(filename);
-                                if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface
-                                    if CONN_h.menus.m_analyses_surfhires
-                                        [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
-                                    else
-                                        [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
-                                        [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
-                                        CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
-                                        CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
-                                    end
-                                else
-                                    [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
-                                end
+                                CONN_h.menus.m_analyses.Y=conn_vol(filename,true);
+                                CONN_h.menus.m_analyses.y.data=[];
+%                                 if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface
+%                                     if CONN_h.menus.m_analyses_surfhires
+%                                         [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
+%                                     else
+%                                         [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
+%                                         [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
+%                                         CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
+%                                         CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
+%                                     end
+%                                 else
+%                                     [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+%                                 end
 								set(CONN_h.screen.hfig,'pointer','arrow');
                             end
                             filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                            CONN_h.menus.m_analyses.X1=load(filename);
+                            CONN_h.menus.m_analyses.X1=conn_loadmatfile(filename,'names','data','crop','xyz','source','conditionname','conditionweights'); CONN_h.menus.m_analyses.X1.filename=filename; 
                             %filename=fullfile(filepath,['COV_Subject',num2str(nsubs,'%03d'),'_Session',num2str(nconditions,'%03d'),'.mat']);
                             %CONN_h.menus.m_analyses.X2=load(filename);
                             if any(CONN_x.Setup.steps([2,3]))
                                 if ~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
                                     try
-                                        CONN_h.menus.m_analyses.XS=spm_vol(deblank(CONN_x.Setup.structural{nsubs}{1}{1})); %note: displaying first-session structural here
+                                        CONN_h.menus.m_analyses.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{nsubs}{1}{1})); %note: displaying first-session structural here
                                     catch
                                         CONN_h.menus.m_analyses.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
                                     end
-                                    xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                                    CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
-                                    CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                    CONN_h.menus.m_analyses.Xs=[];
+%                                     xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+%                                     CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+%                                     CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
                                 end
                             end
                             model=1;
                         case 13,
-                            model=2;
+                            model=1;
                         case 15,
                             CONN_h.menus.m_analyses.y.slice=round(get(CONN_h.menus.m_analyses_00{15},'value'));
                             if ~CONN_h.menus.m_analyses.isready, return; end
                             if any(CONN_x.Setup.steps([2,3]))&&~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
-                                [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
-                                xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                                CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
-                                CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                CONN_h.menus.m_analyses.y.data=[];
+                                %[CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+                                CONN_h.menus.m_analyses.Xs=[];
+%                                 xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+%                                 CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+%                                 CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
                                 CONN_h.menus.m_analyses.Xr=[];
                             end
                             model=1;
@@ -7143,7 +7370,7 @@ else
                                     txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                     if isempty(txt{1}), break; end
                                     if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                        [ok,nill]=mkdir(CONN_x.folders.firstlevel,txt{1});
+                                        [ok,nill]=conn_fileutils('mkdir',CONN_x.folders.firstlevel,txt{1});
                                         if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                     else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                     end
@@ -7177,10 +7404,16 @@ else
                                         txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                         if isempty(txt{1}), break; end
                                         if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                            if isempty(CONN_x.Analyses(CONN_x.Analysis).name), [ok,nill]=mkdir(CONN_x.folders.firstlevel,txt{1});
-                                            elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(CONN_x.Analysis).name),fullfile(CONN_x.folders.firstlevel,txt{1}))); ok=isequal(ok,0);
-                                            else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(CONN_x.Analysis).name),fullfile(CONN_x.folders.firstlevel,txt{1}))); ok=isequal(ok,0);
+                                            try
+                                                if isempty(CONN_x.Analyses(CONN_x.Analysis).name), assert(conn_fileutils('mkdir',CONN_x.folders.firstlevel,txt{1}));
+                                                else conn_fileutils('renamefile',fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(CONN_x.Analysis).name),fullfile(CONN_x.folders.firstlevel,txt{1}));
+                                                end
+                                                ok=true;
                                             end
+                                            %if isempty(CONN_x.Analyses(CONN_x.Analysis).name), [ok,nill]=conn_fileutils('mkdir',CONN_x.folders.firstlevel,txt{1});
+                                            %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(CONN_x.Analysis).name),fullfile(CONN_x.folders.firstlevel,txt{1}))); ok=isequal(ok,0);
+                                            %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel,CONN_x.Analyses(CONN_x.Analysis).name),fullfile(CONN_x.folders.firstlevel,txt{1}))); ok=isequal(ok,0);
+                                            %end
                                             if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                         else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                         end
@@ -7253,10 +7486,17 @@ else
                             set(CONN_h.menus.m_analyses_00{46},'string',tname);
                             if ~isempty(txt)&&~ismember(txt,{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
                                 if ~conn_existfile(fullfile(tfolder,txt),1),
-                                    if isempty(tname), [ok,nill]=mkdir(tfolder,txt);
-                                    elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
-                                    else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    ok=false;
+                                    try
+                                        if isempty(tname), assert(conn_fileutils('mkdir',tfolder,txt));
+                                        else conn_fileutils('renamefile',fullfile(tfolder,tname),fullfile(tfolder,txt));
+                                        end
+                                        ok=true;
                                     end
+                                    %if isempty(tname), [ok,nill]=conn_fileutils('mkdir',tfolder,txt);
+                                    %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %end
                                     if ok,
                                         CONN_x.Analyses(CONN_x.Analysis).name=txt;
                                         idx=find(CONN_h.menus.m_analyses.analyses_listtype==1&CONN_h.menus.m_analyses.analyses_listidx==CONN_x.Analysis,1);
@@ -7319,6 +7559,13 @@ else
                     else  set(CONN_h.menus.m_analyses_00{6},'string','MULTIPLE VALUES'); end
                 end
                 if ~CONN_h.menus.m_analyses.isready, return; end
+                if any([CONN_x.Analyses(ianalysis).regressors.deriv{:}]>0)
+                    if ~isfield(CONN_h.menus.m_analyses.X1,'d1data'), try, temp=conn_loadmatfile(CONN_h.menus.m_analyses.X1.filename,'d1data'); CONN_h.menus.m_analyses.X1.d1data=temp.d1data; end; end
+                    if ~isfield(CONN_h.menus.m_analyses.X1,'d2data'), try, temp=conn_loadmatfile(CONN_h.menus.m_analyses.X1.filename,'d2data'); CONN_h.menus.m_analyses.X1.d2data=temp.d2data; end; end
+                end
+                if any([CONN_x.Analyses(ianalysis).regressors.fbands{:}]>1)
+                    if ~isfield(CONN_h.menus.m_analyses.X1,'fbdata'), try, temp=conn_loadmatfile(CONN_h.menus.m_analyses.X1.filename,'fbdata'); CONN_h.menus.m_analyses.X1.fbdata=temp.fbdata; end; end
+                end
                 [CONN_h.menus.m_analyses.X,CONN_h.menus.m_analyses.select,names]=conn_designmatrix(CONN_x.Analyses(ianalysis).regressors,CONN_h.menus.m_analyses.X1,[],{nregressors,nview});
                 iroi=[];isnew=[];for nroi=1:numel(names),[iroi(nroi),isnew(nroi)]=conn_sourcenames(names{nroi});end; iroi(isnew>0)=nan;
                 CONN_h.menus.m_analyses.iroi=iroi;
@@ -7332,18 +7579,36 @@ else
                         case 3, wx=CONN_h.menus.m_analyses.X1.conditionweights{2};
                         case 4, wx=CONN_h.menus.m_analyses.X1.conditionweights{3};
                     end
+                    if isempty(CONN_h.menus.m_analyses.y.data)&&nshow~=1
+                        if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface
+                            if CONN_h.menus.m_analyses_surfhires
+                                [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
+                            else
+                                [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
+                                [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
+                                CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
+                                CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
+                            end
+                        else
+                            [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+                        end
+                    end
                     if any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
                         if ~(ischar(CONN_x.Analyses(ianalysis).modulation)||CONN_x.Analyses(ianalysis).modulation>0)
                             wx=max(0,wx);
                             xf=cat(2,xf(:,1),conn_wdemean(xf(:,2:end),wx));
                             xf=xf.*repmat(wx,[1,size(xf,2)]);
-                            yf=CONN_h.menus.m_analyses.y.data;
-                            yf=conn_wdemean(yf,wx);
-                            yf=yf.*repmat(wx,[1,size(yf,2)]);
+                            if nshow~=1
+                                yf=CONN_h.menus.m_analyses.y.data;
+                                yf=conn_wdemean(yf,wx);
+                                yf=yf.*repmat(wx,[1,size(yf,2)]);
+                            end
                         else
                             %xf=cat(2,xf(:,1),detrend(xf(:,2:end),'constant'));
-                            yf=CONN_h.menus.m_analyses.y.data;
-                            yf=detrend(yf,'constant');
+                            if nshow~=1
+                                yf=CONN_h.menus.m_analyses.y.data;
+                                yf=detrend(yf,'constant');
+                            end
                             if ~ischar(CONN_x.Analyses(ianalysis).modulation)
                                 %wx=CONN_h.menus.m_analyses.X1.conditionweights{3}; %PPI
                                 if isempty(CONN_x.Analyses(ianalysis).conditions), validconditions=1:length(CONN_x.Setup.conditions.names)-1;
@@ -7352,7 +7617,7 @@ else
                                 wx=[];
                                 for tncondition=[setdiff(validconditions,nconditions) nconditions],
                                     filename=fullfile(CONN_x.folders.preprocessing,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(tncondition),'%03d'),'.mat']);
-                                    X1=load(filename,'conditionweights');
+                                    X1=conn_loadmatfile(filename,'conditionweights');
                                     wx=[wx X1.conditionweights{3}(:)];
                                 end
                                 if ~isempty(validconditions)&&~all(ismember(nconditions,validconditions)), wx(:,end-find(~ismember(nconditions,validconditions))+1)=0; end
@@ -7361,7 +7626,7 @@ else
                                 [name1,name2]=fileparts(CONN_x.Analyses(ianalysis).modulation);
                                 [ok,value1]=ismember(name1,{CONN_x.dynAnalyses.name}); if ~ok, if numel(CONN_x.dynAnalyses)==1, value1=1; else error('Analysis name %s not found',name1); end; end
                                 filename=fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(value1).name,['dyn_Subject',num2str(nsubs,'%03d'),'.mat']);
-                                xmod=load(filename);
+                                xmod=conn_loadmatfile(filename);
                                 [ok,idx]=ismember(name2,xmod.names);
                                 if ok, wx=xmod.data(:,[setdiff(1:size(xmod.data,2),idx),idx]);
                                 else error('Temporal factor not found');
@@ -7385,8 +7650,10 @@ else
                             %xf=[xf inter conn_bsxfun(@times,xf,inter)];
                             %xf=[xf(:,1) detrend([xf(:,2:end) repmat(inter,[1,size(xf,2)]) conn_bsxfun(@times,xf,inter)],'constant')];
                         end
-                        if ismember(CONN_x.Analyses(ianalysis).measure,[2 4]), [CONN_h.menus.m_analyses.B,CONN_h.menus.m_analyses.opt]=conn_glmunivariate('estimate',xf,yf); end
-                        CONN_h.menus.m_analyses.Yf=yf;
+                        if nshow~=1
+                            if ismember(CONN_x.Analyses(ianalysis).measure,[2 4]), [CONN_h.menus.m_analyses.B,CONN_h.menus.m_analyses.opt]=conn_glmunivariate('estimate',xf,yf); end
+                            CONN_h.menus.m_analyses.Yf=yf;
+                        end
                     end
                     CONN_h.menus.m_analyses.nVars=size(xf,2)/nX;
                     CONN_h.menus.m_analyses.Xf=xf;
@@ -7430,14 +7697,18 @@ else
                             end
                             if ~isempty(CONN_h.menus.m_analyses.XR)&&~conn_existfile(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=[]; end
                         end
+                        if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface, issurface=true; else issurface=false; end
                         if isempty(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.Xr=[];
                         elseif CONN_x.Analyses(ianalysis).type==1
-                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=load(char(CONN_h.menus.m_analyses.XR)); end
+                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=conn_loadmatfile(char(CONN_h.menus.m_analyses.XR)); end
                             CONN_h.menus.m_analyses.Xr=CONN_h.menus.m_analyses.XR.Z(:,1:size(CONN_h.menus.m_analyses.XR.Z,1));
+                        elseif issurface
+                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=conn_fileutils('spm_vol',char(CONN_h.menus.m_analyses.XR)); end
+                            CONN_h.menus.m_analyses.Xr=conn_fileutils('spm_read_vols',CONN_h.menus.m_analyses.XR);
                         else
-                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=spm_vol(char(CONN_h.menus.m_analyses.XR)); end
+                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=conn_fileutils('spm_vol',char(CONN_h.menus.m_analyses.XR)); end
                             xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                            CONN_h.menus.m_analyses.Xr=reshape(spm_get_data(CONN_h.menus.m_analyses.XR,pinv(CONN_h.menus.m_analyses.XR(1).mat)*xyz'),CONN_h.menus.m_analyses.Y.matdim.dim(1:2));
+                            CONN_h.menus.m_analyses.Xr=reshape(conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XR,pinv(CONN_h.menus.m_analyses.XR(1).mat)*xyz'),CONN_h.menus.m_analyses.Y.matdim.dim(1:2));
                         end
                         if ~isempty(CONN_h.menus.m_analyses.Xr)
                             if CONN_x.Analyses(ianalysis).type==1 % RRC
@@ -7448,9 +7719,33 @@ else
                                     conn_menumanager('onregionremove',CONN_h.menus.m_analyses_00{15});
                                     set([CONN_h.menus.m_analyses_00{14}.h10 CONN_h.menus.m_analyses_00{15} CONN_h.menus.m_analyses_00{45}],'visible','off');
                                 end
-                            else
+                            elseif issurface % surface
+                                t1=CONN_h.menus.m_analyses.Xr;
+                                t2=abs(t1);
+                                if ~isequal(size(t1),conn_surf_dims(8).*[1 1 2])
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{14},[]);
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{29},[]);
+                                    set(CONN_h.menus.m_analyses_00{24},'visible','on');
+                                elseif ~CONN_h.menus.m_analyses_surfhires
+                                    t1=[t1(CONN_gui.refs.surf.default2reduced) t1(numel(t1)/2+CONN_gui.refs.surf.default2reduced)];
+                                    t2=[t2(CONN_gui.refs.surf.default2reduced) t2(numel(t2)/2+CONN_gui.refs.surf.default2reduced)];
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_gui.refs.surf.defaultreduced,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{29},[]);
+                                else
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_gui.refs.surf.default,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
+                                    conn_menu('update',CONN_h.menus.m_analyses_00{29},[]);
+                                end
+%                                 conn_menu('update',CONN_h.menus.m_analyses_00{14},[]);
+%                                 conn_menu('update',CONN_h.menus.m_analyses_00{29},[]);
+%                                 set(CONN_h.menus.m_analyses_00{24},'visible','on');
+                            else % volume
                                 t1=permute(CONN_h.menus.m_analyses.Xr,[2,1,3]);
                                 t2=abs(t1);
+                                if isempty(CONN_h.menus.m_analyses.Xs)
+                                    xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+                                    CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+                                    CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                end
                                 conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_h.menus.m_analyses.Xs,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
                                 if nargin<2, set([CONN_h.menus.m_analyses_00{14}.h10 CONN_h.menus.m_analyses_00{15} CONN_h.menus.m_analyses_00{45}],'visible','off'); end
                             end
@@ -7529,6 +7824,11 @@ else
                             else
                                 t1=permute(t1,[2,1,3]);
                                 t2=permute(t2,[2,1,3]);
+                                if isempty(CONN_h.menus.m_analyses.Xs)
+                                    xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+                                    CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+                                    CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                end
                                 conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_h.menus.m_analyses.Xs,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
                                 conn_callbackdisplay_firstlevelclick;
                                 if nargin<2, set([CONN_h.menus.m_analyses_00{14}.h10 CONN_h.menus.m_analyses_00{15} CONN_h.menus.m_analyses_00{45}],'visible','off'); end
@@ -7589,7 +7889,7 @@ else
                             CONN_h.menus.m_analyses.Y=conn_vol(filename);
                             CONN_h.menus.m_analyses.y.slice=ceil(CONN_h.menus.m_analyses.Y.matdim.dim(3)/2);
                             filename=fullfile(filepath,['vvPCeig_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                            CONN_h.menus.m_analyses.y.data=load(filename,'D');
+                            CONN_h.menus.m_analyses.y.data=conn_loadmatfile(filename,'D');
                         end
                     end
                     if any(isnewcondition), 
@@ -7622,12 +7922,12 @@ else
                     measuretypes={'Gaussian','Gradient','Laplacian'};
                     CONN_h.menus.m_analyses_00{6}=[];%[CONN_h.menus.m_analyses_00{6}(1),CONN_h.menus.m_analyses_00{6}(2)]=conn_menu('popup',boffset+[.4,.3,.11,.04],'Kernel shape',measuretypes,'Define integration kernel shape','conn(''gui_analyses'',6);');
                     [CONN_h.menus.m_analyses_00{9}(1),CONN_h.menus.m_analyses_00{9}(2)]=conn_menu('edit',boffset+[.225,.55,.20,.04],'Number of factors','','<HTML>Define number of group-level components to estimate. <br/> - group-PCA analyses: Number of components retained from a Principal Component decomposition of the spatiotemporal BOLD signal (temporally-concatenated across subjects)<br/> - group-ICA analyses: Number of components retained from a Independent Component decomposition of the spatiotemporal BOLD signal (FastICA, temporal-concatenation across subjects)<br/> - group-MVPA: Number of components retained from a Principal Component decomposition of the between-subjects variability in seed-to-voxel connectivity maps (separately for each voxel)<br/>After group-level components are computed, subject- and condition- specific components are estimated using dual-regression back projection</HTML>','conn(''gui_analyses'',9);');
-                    [CONN_h.menus.m_analyses_00{7}(1),CONN_h.menus.m_analyses_00{7}(2)]=conn_menu('checkbox',boffset+[.225,.48,.02,.025],'Masked analyses','','<HTML>Anatomical mask for voxel-to-voxel correlation analyses<br/> - check this option for masked-ICA, masked-PCA, or masked-MVPA analyses (group-level spatial components restricted to within-mask voxels)<br/> - uncheck this option to use no explicit masking (all voxels in analysis mask are included)','conn(''gui_analyses'',7);');
-                    [CONN_h.menus.m_analyses_00{8}(1),CONN_h.menus.m_analyses_00{8}(2)]=conn_menu('edit',boffset+[.225,.33,.20,.04],'Dimensionality reduction','','<HTML>(optional) subject-level dimensionality reduction step <br/> - define number of SVD components characterizing each subject Voxel-to-Voxel correlation matrix to retain <br/> - set to <i>inf</i> for no dimensionality reduction</HTML>','conn(''gui_analyses'',8);');
-                    CONN_h.menus.m_analyses_00{3}=[];[CONN_h.menus.m_analyses_00{3}(1),CONN_h.menus.m_analyses_00{3}(2)]=conn_menu('checkbox',boffset+[.225,.51,.02,.025],'Normalization','','<HTML>(optional) computes normalized z-score measures <br/> - When selecting this option the distribution of the resulting voxel-level measures for each subject and condition is Gaussian with mean 0 and variance 1 <br/> - Uncheck this option to skip normalization (compute the raw voxel-level values instead) </HTML>','conn(''gui_analyses'',3);');
+                    [CONN_h.menus.m_analyses_00{7}(1),CONN_h.menus.m_analyses_00{7}(2)]=conn_menu('checkbox',boffset+[.225,.49,.02,.025],'Masked analyses','','<HTML>Anatomical mask for voxel-to-voxel correlation analyses<br/> - check this option for masked-ICA, masked-PCA, or masked-MVPA analyses (group-level spatial components restricted to within-mask voxels)<br/> - uncheck this option to use no explicit masking (all voxels in analysis mask are included)','conn(''gui_analyses'',7);');
+                    [CONN_h.menus.m_analyses_00{8}(1),CONN_h.menus.m_analyses_00{8}(2)]=conn_menu('edit',boffset+[.225,.32,.20,.04],'Dimensionality reduction','','<HTML>(optional) subject-level dimensionality reduction step <br/> - define number of SVD components characterizing each subject Voxel-to-Voxel correlation matrix to retain <br/> - set to <i>inf</i> for no dimensionality reduction</HTML>','conn(''gui_analyses'',8);');
+                    CONN_h.menus.m_analyses_00{3}=[];[CONN_h.menus.m_analyses_00{3}(1),CONN_h.menus.m_analyses_00{3}(2)]=conn_menu('checkbox',boffset+[.225,.41,.02,.025],'Normalization','','<HTML>(optional) computes normalized z-score measures <br/> - When selecting this option the distribution of the resulting voxel-level measures for each subject and condition is Gaussian with mean 0 and variance 1 <br/> - Uncheck this option to skip normalization (compute the raw voxel-level values instead) </HTML>','conn(''gui_analyses'',3);');
                     CONN_h.menus.m_analyses_00{17}=[];[CONN_h.menus.m_analyses_00{17}(1),CONN_h.menus.m_analyses_00{17}(2)]=conn_menu('checkbox',boffset+[.225,.51,.02,.025],'Centering','','<HTML>(optional) centers MVPA components<br/> - When selecting this option the MVPA components have zero mean across all subjects/conditions (MVPA components defined using PCA of covariance in seed-to-voxel connectivity values across subjects) <br/> - Uncheck this option to skip centering (PCA decomposition uses second moment about zero instead of second moment about the mean) </HTML>','conn(''gui_analyses'',17);');
                     measuretypes={'G1 FastICA + GICA1 Back-projection','G2 FastICA + GICA1 Back-projection','G3 FastICA + GICA1 Back-projection','G1 FastICA + GICA3 Back-projection','G2 FastICA + GICA3 Back-projection','G3 FastICA + GICA3 Back-projection'};
-                    CONN_h.menus.m_analyses_00{18}=conn_menu('popup',boffset+[.225,.42,.26,.04],'',measuretypes,'<HTML>choice of ICA method<br/> - FastICA G1 (tanh), G2 (gauss), or G3 (pow3) specify non-linear contrast function in iterative FastICA algorithm <br/> - Back-projection GICA1, or GICA3 specify choice of back-projection method in Calhoun''s group-ICA algorithm <br/> note: default settings = G1 FastICA + GICA3 Back-projection</HTML>','conn(''gui_analyses'',18);');
+                    CONN_h.menus.m_analyses_00{18}=conn_menu('popup',boffset+[.225,.43,.26,.04],'',measuretypes,'<HTML>choice of ICA method<br/> - FastICA G1 (tanh), G2 (gauss), or G3 (pow3) specify non-linear contrast function in iterative FastICA algorithm <br/> - Back-projection GICA1, or GICA3 specify choice of back-projection method in Calhoun''s group-ICA algorithm <br/> note: default settings = G1 FastICA + GICA3 Back-projection</HTML>','conn(''gui_analyses'',18);');
                     %set([CONN_h.menus.m_analyses_00{3}(2) CONN_h.menus.m_analyses_00{17}(2)],'position',boffset+[.245,.51,.09,.03]);
                     
                     set(CONN_h.menus.m_analyses_00{13},'string',{'<HTML>Analysis results <small>(from disk)</small></HTML>'},'value',1);
@@ -7668,13 +7968,13 @@ else
 %                     
 %                     if 0,%~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
 %                         try
-%                             CONN_h.menus.m_analyses.XS=spm_vol(deblank(CONN_x.Setup.structural{1}{1}{1}));
+%                             CONN_h.menus.m_analyses.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{1}{1}{1}));
 %                         catch
 %                             CONN_h.menus.m_analyses.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
 %                         end
 %                         if ~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)&&any(CONN_x.Setup.steps([3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
 %                             xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-%                             CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+%                             CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
 %                             CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
 %                             set(CONN_h.menus.m_analyses_00{15},'min',1,'max',CONN_h.menus.m_analyses.Y.matdim.dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_analyses.Y.matdim.dim(3)-1)),'value',CONN_h.menus.m_analyses.y.slice);
 %                             set(CONN_h.menus.m_analyses_00{14}.h10,'string','eps');
@@ -7810,35 +8110,37 @@ else
                             if any(CONN_x.Setup.steps([2,3])),%~isfield(CONN_x.Setup,'doROIonly')||~CONN_x.Setup.doROIonly,
 								set(CONN_h.screen.hfig,'pointer',CONN_gui.waiticon); drawnow;
                                 filename=fullfile(filepath,['DATA_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                                CONN_h.menus.m_analyses.Y=conn_vol(filename);
-                                if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface
-                                    if CONN_h.menus.m_analyses_surfhires
-                                        [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
-                                    else
-                                        [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
-                                        [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
-                                        CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
-                                        CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
-                                    end
-                                else
-                                    [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
-                                end
+                                CONN_h.menus.m_analyses.Y=conn_vol(filename,true);
+                                CONN_h.menus.m_analyses.y.data=[];
+%                                 if isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface
+%                                     if CONN_h.menus.m_analyses_surfhires
+%                                         [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_volume(CONN_h.menus.m_analyses.Y);
+%                                     else
+%                                         [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,1);
+%                                         [tempdata,tempidx]=conn_get_slice(CONN_h.menus.m_analyses.Y,conn_surf_dims(8)*[0;0;1]+1);
+%                                         CONN_h.menus.m_analyses.y.data=[CONN_h.menus.m_analyses.y.data(:,CONN_gui.refs.surf.default2reduced) tempdata(:,CONN_gui.refs.surf.default2reduced)];
+%                                         CONN_h.menus.m_analyses.y.idx=[CONN_h.menus.m_analyses.y.idx(CONN_gui.refs.surf.default2reduced);prod(conn_surf_dims(8))+tempidx(CONN_gui.refs.surf.default2reduced)];
+%                                     end
+%                                 else
+%                                     [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+%                                 end
 								set(CONN_h.screen.hfig,'pointer','arrow');
                             end
-                            filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
-                            CONN_h.menus.m_analyses.X1=load(filename);
+                            %filename=fullfile(filepath,['ROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']);
+                            %CONN_h.menus.m_analyses.X1=conn_loadmatfile(filename);
                             %filename=fullfile(filepath,['COV_Subject',num2str(nsubs,'%03d'),'_Session',num2str(nconditions,'%03d'),'.mat']);
                             %CONN_h.menus.m_analyses.X2=load(filename);
                             if any(CONN_x.Setup.steps([2,3]))
                                 if ~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
                                     try
-                                        CONN_h.menus.m_analyses.XS=spm_vol(deblank(CONN_x.Setup.structural{nsubs}{1}{1})); %note: displaying first-session structural here
+                                        CONN_h.menus.m_analyses.XS=conn_fileutils('spm_vol',deblank(CONN_x.Setup.structural{nsubs}{1}{1})); %note: displaying first-session structural here
                                     catch
                                         CONN_h.menus.m_analyses.XS=spm_vol(fullfile(fileparts(which('spm')),'canonical','single_subj_T1.nii'));
                                     end
-                                    xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                                    CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
-                                    CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                    CONN_h.menus.m_analyses.Xs=[];
+%                                     xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+%                                     CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+%                                     CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
                                 end
                             end
                             model=1;
@@ -7857,10 +8159,12 @@ else
                             CONN_h.menus.m_analyses.y.slice=round(get(CONN_h.menus.m_analyses_00{15},'value'));
                             if ~CONN_h.menus.m_analyses.isready, return; end
                             if any(CONN_x.Setup.steps([2,3]))&&~(isfield(CONN_h.menus.m_analyses.Y,'issurface')&&CONN_h.menus.m_analyses.Y.issurface)
-                                [CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
-                                xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                                CONN_h.menus.m_analyses.Xs=spm_get_data(CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
-                                CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                CONN_h.menus.m_analyses.y.data=[];
+                                %[CONN_h.menus.m_analyses.y.data,CONN_h.menus.m_analyses.y.idx]=conn_get_slice(CONN_h.menus.m_analyses.Y,CONN_h.menus.m_analyses.y.slice);
+                                CONN_h.menus.m_analyses.Xs=[];
+%                                 xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+%                                 CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+%                                 CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
                                 CONN_h.menus.m_analyses.Xr=[];
                             end
                             model=1;
@@ -7889,7 +8193,7 @@ else
                                     txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                     if isempty(txt{1}), break; end
                                     if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                        [ok,nill]=mkdir(CONN_x.folders.firstlevel_vv,txt{1});
+                                        [ok,nill]=conn_fileutils('mkdir',CONN_x.folders.firstlevel_vv,txt{1});
                                         if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                     else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                     end
@@ -7921,10 +8225,16 @@ else
                                         txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                         if isempty(txt{1}), break; end
                                         if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                            if isempty(CONN_x.vvAnalyses(CONN_x.vvAnalysis).name), [ok,nill]=mkdir(CONN_x.folders.firstlevel_vv,txt{1});
-                                            elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name),fullfile(CONN_x.folders.firstlevel_vv,txt{1}))); ok=isequal(ok,0);
-                                            else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name),fullfile(CONN_x.folders.firstlevel_vv,txt{1}))); ok=isequal(ok,0);
+                                            try
+                                                if isempty(CONN_x.vvAnalyses(CONN_x.vvAnalysis).name), assert(conn_fileutils('mkdir',CONN_x.folders.firstlevel_vv,txt{1}));
+                                                else conn_fileutils('renamefile',fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name),fullfile(CONN_x.folders.firstlevel_vv,txt{1}));
+                                                end
+                                                ok=true;
                                             end
+                                            %if isempty(CONN_x.vvAnalyses(CONN_x.vvAnalysis).name), [ok,nill]=conn_fileutils('mkdir',CONN_x.folders.firstlevel_vv,txt{1});
+                                            %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name),fullfile(CONN_x.folders.firstlevel_vv,txt{1}))); ok=isequal(ok,0);
+                                            %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name),fullfile(CONN_x.folders.firstlevel_vv,txt{1}))); ok=isequal(ok,0);
+                                            %end
                                             if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                         else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                         end
@@ -8000,10 +8310,17 @@ else
                             set(CONN_h.menus.m_analyses_00{46},'string',tname);
                             if ~isempty(txt)&&~ismember(txt,{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
                                 if ~conn_existfile(fullfile(tfolder,txt),1),
-                                    if isempty(tname), [ok,nill]=mkdir(tfolder,txt);
-                                    elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
-                                    else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    ok=false;
+                                    try
+                                        if isempty(tname), assert(conn_fileutils('mkdir',tfolder,txt));
+                                        else conn_fileutils('renamefile',fullfile(tfolder,tname),fullfile(tfolder,txt));
+                                        end
+                                        ok=true;
                                     end
+                                    %if isempty(tname), [ok,nill]=conn_fileutils('mkdir',tfolder,txt);
+                                    %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %end
                                     if ok,
                                         CONN_x.vvAnalyses(CONN_x.vvAnalysis).name=txt;
                                         idx=find(CONN_h.menus.m_analyses.analyses_listtype==2&CONN_h.menus.m_analyses.analyses_listidx==CONN_x.vvAnalysis,1);
@@ -8091,13 +8408,18 @@ else
                     end
                     if isempty(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.Xr=[];
                     else
-                        if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=spm_vol(char(CONN_h.menus.m_analyses.XR)); end
+                        if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=conn_fileutils('spm_vol',char(CONN_h.menus.m_analyses.XR)); end
                         xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
-                        CONN_h.menus.m_analyses.Xr=permute(reshape(spm_get_data(CONN_h.menus.m_analyses.XR,pinv(CONN_h.menus.m_analyses.XR(1).mat)*xyz'),[],CONN_h.menus.m_analyses.Y.matdim.dim(1),CONN_h.menus.m_analyses.Y.matdim.dim(2)),[2,3,4,1]);
+                        CONN_h.menus.m_analyses.Xr=permute(reshape(conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XR,pinv(CONN_h.menus.m_analyses.XR(1).mat)*xyz'),[],CONN_h.menus.m_analyses.Y.matdim.dim(1),CONN_h.menus.m_analyses.Y.matdim.dim(2)),[2,3,4,1]);
                     end
                     if ~isempty(CONN_h.menus.m_analyses.Xr)
                         t1=permute(CONN_h.menus.m_analyses.Xr,[2,1,3,4]);
                         t2=abs(t1);
+                        if isempty(CONN_h.menus.m_analyses.Xs)
+                            xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+                            CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+                            CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                        end
                         conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_h.menus.m_analyses.Xs,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
                         set(CONN_h.menus.m_analyses_00{24},'visible','off');
                         if nargin<2
@@ -8130,6 +8452,11 @@ else
                                 t2=abs(d);
                                 t2=permute(t2,[2,1,3]);
                                 set(CONN_h.menus.m_analyses_00{14}.h9,'string',mat2str(max(t2(:)),2));
+                                if isempty(CONN_h.menus.m_analyses.Xs)
+                                    xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))*(CONN_h.menus.m_analyses.y.slice-1)+(1:prod(CONN_h.menus.m_analyses.Y.matdim.dim(1:2))),CONN_h.menus.m_analyses.Y.matdim.mat,CONN_h.menus.m_analyses.Y.matdim.dim);
+                                    CONN_h.menus.m_analyses.Xs=conn_fileutils('spm_get_data',CONN_h.menus.m_analyses.XS(1),pinv(CONN_h.menus.m_analyses.XS(1).mat)*xyz');
+                                    CONN_h.menus.m_analyses.Xs=permute(reshape(CONN_h.menus.m_analyses.Xs,CONN_h.menus.m_analyses.Y.matdim.dim(1:2)),[2,1,3]);
+                                end
                                 conn_menu('update',CONN_h.menus.m_analyses_00{14},{CONN_h.menus.m_analyses.Xs,t1,t2},{CONN_h.menus.m_analyses.Y.matdim,CONN_h.menus.m_analyses.y.slice});
                                 conn_menu('updatecscale',[],[],CONN_h.menus.m_analyses_00{14}.h9);
                                 conn_menu('updatethr',[],[],CONN_h.menus.m_analyses_00{14}.h10);
@@ -8220,7 +8547,8 @@ else
                     CONN_x.dynAnalyses(CONN_x.dynAnalysis).output(2)=1;
                     set(CONN_h.menus.m_analyses_00{6},'string',mat2str(CONN_x.dynAnalyses(CONN_x.dynAnalysis).window));
                     %set(CONN_h.menus.m_analyses_00{12},'value',CONN_x.dynAnalyses(CONN_x.dynAnalysis).analyses);
-                    if any(arrayfun(@(n)isempty(dir(fullfile(CONN_x.folders.preprocessing,['ROI_Subject',num2str(n,'%03d'),'_Condition',num2str(0,'%03d'),'.mat']))),1:CONN_x.Setup.nsubjects)), conn_msgbox({'Not ready to start first-level Analysis step',' ','Please complete the Denoising step first','(fill any required information and press "Done" in the Denoising tab)'},'',2); return; end %conn gui_preproc; return; end
+                    if any(~conn_existfile(fullfile(CONN_x.folders.preprocessing,arrayfun(@(n)['ROI_Subject',num2str(n,'%03d'),'_Condition',num2str(0,'%03d'),'.mat'],1:CONN_x.Setup.nsubjects,'uni',0)))), conn_msgbox({'Not ready to start first-level Analysis step',' ','Please complete the Denoising step first','(fill any required information and press "Done" in the Denoising tab)'},'',2); return; end %conn gui_preproc; return; end
+                    %if any(arrayfun(@(n)~conn_existfile(fullfile(CONN_x.folders.preprocessing,['ROI_Subject',num2str(n,'%03d'),'_Condition',num2str(0,'%03d'),'.mat'])),1:CONN_x.Setup.nsubjects)), conn_msgbox({'Not ready to start first-level Analysis step',' ','Please complete the Denoising step first','(fill any required information and press "Done" in the Denoising tab)'},'',2); return; end %conn gui_preproc; return; end
                     CONN_h.menus.m_analyses.X=[];
                     CONN_h.menus.m_analyses.select={[],[]};
                     set(CONN_h.menus.m_analyses_00{13},'string',{'<HTML>Analysis results <small>(from disk)</small></HTML>'},'value',1);
@@ -8296,7 +8624,7 @@ else
                                     txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                     if isempty(txt{1}), break; end
                                     if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                        [ok,nill]=mkdir(CONN_x.folders.firstlevel_dyn,txt{1});
+                                        [ok,nill]=conn_fileutils('mkdir',CONN_x.folders.firstlevel_dyn,txt{1});
                                         if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                     else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                     end
@@ -8327,9 +8655,13 @@ else
                                         txt{1}=regexprep(txt{1},'[^\w\d_]','');
                                         if isempty(txt{1}), break; end
                                         if ~ismember(txt{1},{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
-                                            if ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name),fullfile(CONN_x.folders.firstlevel_dyn,txt{1}))); ok=isequal(ok,0);
-                                            else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name),fullfile(CONN_x.folders.firstlevel_dyn,txt{1}))); ok=isequal(ok,0);
+                                            try
+                                                conn_fileutils('renamefile',fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name),fullfile(CONN_x.folders.firstlevel_dyn,txt{1}));
+                                                ok=true;
                                             end
+                                            %if ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name),fullfile(CONN_x.folders.firstlevel_dyn,txt{1}))); ok=isequal(ok,0);
+                                            %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name),fullfile(CONN_x.folders.firstlevel_dyn,txt{1}))); ok=isequal(ok,0);
+                                            %end
                                             if ~ok, conn_msgbox('Unable to create folder. Check folder permissions','conn',2);end
                                         else conn_msgbox('Duplicated analysis name. Please try a different name','conn',2);
                                         end
@@ -8394,10 +8726,17 @@ else
                             set(CONN_h.menus.m_analyses_00{46},'string',tname);
                             if ~isempty(txt)&&~ismember(txt,{CONN_x.Analyses.name CONN_x.vvAnalyses.name CONN_x.dynAnalyses.name})
                                 if ~conn_existfile(fullfile(tfolder,txt),1),
-                                    if isempty(tname), [ok,nill]=mkdir(tfolder,txt);
-                                    elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
-                                    else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    ok=false;
+                                    try
+                                        if isempty(tname), assert(conn_fileutils('mkdir',tfolder,txt));
+                                        else conn_fileutils('renamefile',fullfile(tfolder,tname),fullfile(tfolder,txt));
+                                        end
+                                        ok=true;
                                     end
+                                    %if isempty(tname), [ok,nill]=conn_fileutils('mkdir',tfolder,txt);
+                                    %elseif ispc, [ok,nill]=system(sprintf('ren "%s" "%s"',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %else [ok,nill]=system(sprintf('mv ''%s'' ''%s''',fullfile(tfolder,tname),fullfile(tfolder,txt))); ok=isequal(ok,0);
+                                    %end
                                     if ok,
                                         CONN_x.dynAnalyses(CONN_x.dynAnalysis).name=txt;
                                         idx=find(CONN_h.menus.m_analyses.analyses_listtype==3&CONN_h.menus.m_analyses.analyses_listidx==CONN_x.dynAnalysis,1);
@@ -8422,7 +8761,7 @@ else
                         if 0
                             temp=fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name,['dyn_Subject',num2str(nsubs,'%03d'),'.mat']);
                             if conn_existfile(temp)
-                                load(temp,'names');
+                                names={}; conn_loadmatfile(temp,'names');
                                 CONN_h.menus.m_analyses.XR=cellfun(@(names)fullfile(CONN_x.folders.firstlevel_dyn,CONN_x.dynAnalyses(CONN_x.dynAnalysis).name,names,['resultsROI_Subject',num2str(nsubs,'%03d'),'_Condition',num2str(CONN_h.menus.m_analyses.icondition(nconditions),'%03d'),'.mat']),names,'uni',0);
                             else  CONN_h.menus.m_analyses.XR=[];
                             end
@@ -8447,7 +8786,7 @@ else
                             CONN_h.menus.m_analyses.Xr=zeros(size(CONN_h.menus.m_analyses.XR,1)+2,size(CONN_h.menus.m_analyses.XR,2)+2,size(CONN_h.menus.m_analyses.XR,3));
                             CONN_h.menus.m_analyses.Xr(2:end-1,2:end-1,:)=CONN_h.menus.m_analyses.XR;
                         else
-                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=load(char(CONN_h.menus.m_analyses.XR)); end
+                            if iscell(CONN_h.menus.m_analyses.XR)||ischar(CONN_h.menus.m_analyses.XR), CONN_h.menus.m_analyses.XR=conn_loadmatfile(char(CONN_h.menus.m_analyses.XR)); end
                             idx=strmatch(CONN_x.Setup.conditions.names{nconditions},CONN_h.menus.m_analyses.XR.COND_names,'exact');
                             if numel(idx)==1
                                 CONN_h.menus.m_analyses.Xr=CONN_h.menus.m_analyses.XR.H(CONN_h.menus.m_analyses.XR.IDX_subject==nsubs,:);
@@ -8753,7 +9092,7 @@ else
                     Nplots=[3 2];
                     pos=[.55 .35];
                     conn_menu('frame2semiborder',[pos(1)-.02,.08,pos(2)+.04,.77],' ');%'Bookmarked plots');
-                    tdirs=dir(fullfile(CONN_x.folders.bookmarks,'*'));
+                    tdirs=conn_dirn(fullfile(CONN_x.folders.bookmarks,'*'));
                     tdirs=tdirs([tdirs.isdir]&~ismember({tdirs.name},{'.','..'}));
                     tdirs={tdirs.name};
                     CONN_h.menus.m_results.bookmark_allfolders=tdirs;
@@ -8839,7 +9178,7 @@ else
                                 %j=j+round((CONN_h.menus.m_results.bookmark_Nplots(2)-max(j(:)))/2);
                                 for n=1:prod(CONN_h.menus.m_results.bookmark_Nplots)
                                     if n<=numel(files_idx),
-                                        data=imread(CONN_h.menus.m_results.bookmark_files{files_idx(n)});
+                                        data=conn_fileutils('imread',CONN_h.menus.m_results.bookmark_files{files_idx(n)});
                                         CONN_h.menus.m_results_00{10+n}.hcallback=@(varargin)CONN_h.menus.m_results.bookmark_files_descr{files_idx(n)};
                                         CONN_h.menus.m_results_00{10+n}.hcallback2=@(varargin)conn('gui_results',7,CONN_h.menus.m_results.bookmark_files{files_idx(n)});
                                         conn_menu('updatematrixequal',CONN_h.menus.m_results_00{10+n},data);
@@ -8874,7 +9213,7 @@ else
                                 case 'Delete', 
                                     answ=conn_questdlg({sprintf('Are you sure you want to delete plot %s?',name)},'','Delete','Cancel','Delete');
                                     if isequal(answ,'Delete')
-                                        try, spm_unlink(filename); end
+                                        try, conn_fileutils('spm_unlink',filename); end
                                         conn gui_results;
                                     end
                             end
@@ -9029,12 +9368,12 @@ else
                 if CONN_h.menus.m_results.usetablewhite==0, dp1=dp1+.10; end
                 if state==1,
                     conn_menu('frame',boffset+[-.030,.34-dp1,.585,.505+dp1],'Group-analysis settings');
-                    conn_menu('framewhitehighlight',boffset+[-.02,.710,.565,.07],' ');
+                    conn_menu('framewhitehighlight',boffset+[-.02,.710,.565,.070],' ');
                     %conn_menu('frame2noborder',boffset+[-.035,.325,.22,.515],'');%'Second-level design');
                     conn_menu('frame2semiborder',boffset+[.570,.085,.37,.81],'');
                 elseif state==2||state==3
                     conn_menu('frame',boffset+[-.030,.34-dp1,.585,.505+dp1],'Group-analysis settings');
-                    conn_menu('framewhitehighlight',boffset+[-.020,.710,.565,.07],' ');
+                    conn_menu('framewhitehighlight',boffset+[-.020,.710,.565,.070],' ');
                     %conn_menu('frame2noborder',boffset+[-.035,.325,.22,.515],'');%'Second-level design');
                     conn_menu('frame2semiborder',boffset+[.570,.085,.37,.81],'');
                 end
@@ -9166,7 +9505,7 @@ else
                         end
                         %icovariates=find(cellfun(@(x)~isempty(regexp(x,'^_\S* ICA')),CONN_x.Setup.l2covariates.names));
                         conn_calculator(icovariates);
-                        conn_menu('framewhitehighlight',boffset+[-.02,.785,.56,.03],'');
+                        conn_menu('framewhitehighlight',boffset+[-.021,.78,.561,.04],'');
                         CONN_h.menus.m_results_00{20}=conn_menu('popupbigwhite',boffset+[-.02,.775,.56,.05],'',CONN_h.menus.m_results.analyses_listnames,'<HTML>select first-level analysis</HTML>','conn(''gui_results'',20);');
                         set(CONN_h.menus.m_results_00{20},'value',CONN_h.menus.m_results.analyses_selected);
                         %CONN_h.menus.m_results_00{20}=conn_menu('popupbigblue',boffset+[.095,.84,.55,.05],'',txt(CONN_h.menus.m_results.shownanalyses),'<HTML>select first-level analysis</HTML>','conn(''gui_results'',20);');
@@ -9183,7 +9522,7 @@ else
                     elseif stateb==2
                         icovariates=find(cellfun(@(x)~isempty(regexp(x,'^Dynamic |^_(Average|Frequency|Variability) Dynamic factor'))&~isempty(regexp(x,[CONN_x.dynAnalyses(CONN_x.dynAnalysis).name ' @ .*$'])),CONN_x.Setup.l2covariates.names));
                         conn_calculator(icovariates);
-                        conn_menu('framewhitehighlight',boffset+[-.02,.785,.56,.03],'');
+                        conn_menu('framewhitehighlight',boffset+[-.021,.78,.561,.04],'');
                         CONN_h.menus.m_results_00{20}=conn_menu('popupbigwhite',boffset+[-.025,.775,.56,.05],'',CONN_h.menus.m_results.analyses_listnames,'<HTML>select first-level analysis</HTML>','conn(''gui_results'',20);');
                         set(CONN_h.menus.m_results_00{20},'value',CONN_h.menus.m_results.analyses_selected);
                         %CONN_h.menus.m_results_00{20}=conn_menu('popupbigblue',boffset+[.10,.84,.525,.05],'',txt(CONN_h.menus.m_results.shownanalyses),'<HTML>select first-level analysis</HTML>','conn(''gui_results'',20);');
@@ -9329,13 +9668,13 @@ else
                         if ~isfield(CONN_x.Results.xX,'inferencelevel'), CONN_x.Results.xX.inferencelevel=.05; end
                         if ~isfield(CONN_x.Results.xX,'inferenceleveltype'), CONN_x.Results.xX.inferenceleveltype=1; end
                         if ~isfield(CONN_x.Results.xX,'displayrois'), CONN_x.Results.xX.displayrois=2; end
-                        strstr3={'<HTML>Group-analysis results <small>(from disk)</small></HTML>','<HTML>Seed-based parameters <small>(preview of current settings)</small></HTML>'};
+                        strstr3={'<HTML>Group-analysis results <small>(from disk)</small></HTML>','<HTML>Individual connections <small>(preview of current settings)</small></HTML>'};
                         if stateb, strstr3=strstr3(1); end
-                        CONN_h.menus.m_results_00{32}=conn_menu('popup2big',boffset+[pos(1)+.10,pos(2)+pos(4)+.01,.25,.045],'',strstr3,'<HTML>Select <i>''Group-analysis results (from disk)''</i> to display the results of this group-level analysis (as stored the last time this group-analysis was computed across the entire RRC matrix)<br/>Select <i>''Seed-based parameters (preview of current settings)''</i> to display a preview of the results of this group-level analysis for the selected seed/source ROI only, and adapting in real time to the options selected in the ''group-analysis settings'' tab</HTML>','conn(''gui_results'',32);');
+                        CONN_h.menus.m_results_00{32}=conn_menu('popup2big',boffset+[pos(1)+.10,pos(2)+pos(4)+.01,.25,.045],'',strstr3,'<HTML>Select <i>''Group-analysis results (from disk)''</i> to display the results of this group-level analysis (as stored the last time this group-analysis was computed across the entire RRC matrix)<br/>Select <i>''Individual connections (preview of current settings)''</i> to display a preview of the results of this group-level analysis for individual ROI-to-ROI pairs only, and adapting in real time to the options selected in the ''group-analysis settings'' tab</HTML>','conn(''gui_results'',32);');
                         CONN_x.Results.xX.displayvoxels=max(1,min(numel(strstr3), CONN_x.Results.xX.displayvoxels));
                         set(CONN_h.menus.m_results_00{32},'value',CONN_x.Results.xX.displayvoxels);
                         
-                        hc1=uicontextmenu(CONN_h.screen.hfig);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                         %uimenu(hc1,'Label','Select target-ROIs set','callback','conn(''gui_results'',27)');
                         strstr3={'Targets = all ROIs','Targets = source ROIs only','Targets = selected ROIs only'};
                         hc2=[uimenu(hc1,'Label',strstr3{1},'callback','conn(''gui_results'',31,1);');...
@@ -9356,7 +9695,7 @@ else
                         set(CONN_h.menus.m_results_00{47},'value',1);
                         %CONN_h.menus.m_results_00{31}=conn_menu('popup2',boffset+[.63,pos(2)+pos(4),.26,.04],'',strstr3,'choose target ROIs','conn(''gui_results'',31);');
                         %set(CONN_h.menus.m_results_00{31},'value',CONN_x.Results.xX.displayrois);
-                        CONN_h.menus.m_results_00{46}=conn_menu('pushbuttonblue2',boffset+[pos(1)+.09,pos(2)-.095,.165,.045],'','display results','<HTML>Computes (or displays, if already computed) analyses of the entire ROI-to-ROI connectivity matrix, including connection-level and cluster-level statistics</HTML>','conn(''gui_results'',46);');
+                        CONN_h.menus.m_results_00{46}=conn_menu('pushbuttonblue2',boffset+[pos(1)+.09,pos(2)-.095,.165,.045],'','display RRC results','<HTML>Computes (or displays, if already computed) analyses of the entire ROI-to-ROI connectivity matrix, including connection-level and cluster-level statistics</HTML>','conn(''gui_results'',46);');
                         CONN_h.menus.m_results_00{52}=conn_menu('pushbuttonblue2',boffset+[pos(1)+.09,pos(2)-.140,.165,.045],'','graph-theory results','<HTML>Computes graph-theoretical analyses of the entire ROI-to-ROI connectivity matrix, including network- and ROI-level statistics</HTML>','conn(''gui_results_graphtheory'');');
                         
                         %CONN_h.menus.m_results_00{28}=uicontrol('style','popupmenu','units','norm','position',boffset+[.81,.08,.08,.045],'string',strstr1,'fontsize',8+CONN_gui.font_offset,'value',CONN_x.Results.xX.inferencetype,'backgroundcolor',CONN_gui.backgroundcolorA,'foregroundcolor',[0 0 0]+.4+.2*(mean(CONN_gui.backgroundcolorA)<.5),'tooltipstring','choose inference directionality','callback','conn(''gui_results'',28);');
@@ -9394,7 +9733,7 @@ else
                         hold(CONN_h.menus.m_results_00{25},'on');
                         %try, [nill,hc]=contourf(xs,0:.01:.25); set(hc,'edgecolor','none'); set(gca,'clim',[0 2]); end
                         CONN_h.menus.m_results_00{26}=patch(nan,nan,'k','parent',CONN_h.menus.m_results_00{25});
-                        hc1=uicontextmenu(CONN_h.screen.hfig);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                         uimenu(hc1,'Label','3d view','callback','conn(''gui_results_roi3d'');');
                         uimenu(hc1,'Label','Change background anatomical image','callback','conn(''background_image'');conn gui_results;');
                         set(hi,'uicontextmenu',hc1);
@@ -9459,7 +9798,7 @@ else
                     end
                     
                     %                 filename=fullfile(filepathresults,['resultsROI_Condition',num2str(1,'%03d'),'.mat']);
-                    %                 if isempty(dir(filename)),Ransw=conn_questdlg('First-level ROI analyses have not completed. Perform now?','warning','Yes','No','Yes');if strcmp(Ransw,'Yes'), conn_process('analyses_ROI'); end;end
+                    %                 if ~conn_existfile(filename),Ransw=conn_questdlg('First-level ROI analyses have not completed. Perform now?','warning','Yes','No','Yes');if strcmp(Ransw,'Yes'), conn_process('analyses_ROI'); end;end
                     %                 load(filename,'names','xyz');
                     set(CONN_h.menus.m_results_00{11},'max',2);set(CONN_h.menus.m_results_00{12},'max',2);set(CONN_h.menus.m_results_00{13},'max',2);
                     tnames=CONN_x.Setup.l2covariates.names(1:end-1); 
@@ -9468,7 +9807,7 @@ else
                     else CONN_h.menus.m_results.showneffects=find(cellfun(@(x)isempty(regexp(x,'^Dynamic |^_|^QA_|^QC_')),tnames)); 
                     end
                     if any(cellfun(@(x)~isempty(regexp(x,'^Dynamic |^_|^QA_|^QC_')),tnames))
-                        hc1=uicontextmenu(CONN_h.screen.hfig);
+                        hc1=uicontextmenu('parent',CONN_h.screen.hfig);
                         if CONN_h.menus.m_results.showneffects_showall, uimenu(hc1,'Label','Hide secondary variables','callback','conn(''gui_results'',39);');
                         else uimenu(hc1,'Label','Show secondary variables','callback','conn(''gui_results'',39);');
                         end
@@ -9558,9 +9897,9 @@ else
                     end
                     isvalidcondition=true(1,numel(icondition));
                     switch(state)
-                        case 1, isvalidcondition=arrayfun(@(n)conn_existfile(fullfile(filepathresults,['resultsROI_Condition',num2str(n,'%03d'),'.mat'])),icondition);
-                        case 2, isvalidcondition=arrayfun(@(n)conn_existfile(fullfile(filepathresults,['BETA_Subject',num2str(1,CONN_x.opt.fmt1),'_Condition',num2str(n,'%03d'),'_Source',num2str(CONN_h.menus.m_results.outcomeisource(nsources(1)),'%03d'),'.nii'])),icondition);
-                        case 3, for n1=nsources(:)', isvalidcondition=isvalidcondition&arrayfun(@(n)conn_existfile(fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name,['BETA_Subject',num2str(1,'%03d'),'_Condition',num2str(n,'%03d'),'_Measure',num2str(CONN_h.menus.m_results.outcomeisource(n1),'%03d'),'_Component',num2str(CONN_h.menus.m_results.outcomencompsource(n1),'%03d'),'.nii'])),icondition); end
+                        case 1, isvalidcondition=conn_existfile(arrayfun(@(n)fullfile(filepathresults,['resultsROI_Condition',num2str(n,'%03d'),'.mat']),icondition,'uni',0));
+                        case 2, isvalidcondition=conn_existfile(arrayfun(@(n)fullfile(filepathresults,['BETA_Subject',num2str(1,CONN_x.opt.fmt1),'_Condition',num2str(n,'%03d'),'_Source',num2str(CONN_h.menus.m_results.outcomeisource(nsources(1)),'%03d'),'.nii']),icondition,'uni',0));
+                        case 3, for n1=nsources(:)', isvalidcondition=isvalidcondition&conn_existfile(arrayfun(@(n)fullfile(CONN_x.folders.firstlevel_vv,CONN_x.vvAnalyses(CONN_x.vvAnalysis).name,['BETA_Subject',num2str(1,'%03d'),'_Condition',num2str(n,'%03d'),'_Measure',num2str(CONN_h.menus.m_results.outcomeisource(n1),'%03d'),'_Component',num2str(CONN_h.menus.m_results.outcomencompsource(n1),'%03d'),'.nii']),icondition,'uni',0)); end
                     end
                     CONN_h.menus.m_results.shownconditions=find(~isnewcondition&isvalidcondition);
                     %if isempty(CONN_h.menus.m_results.shownconditions), uiwait(errordlg('No conditions found. Please re-run first-level analyses','Data not prepared for analyses')); end
@@ -9675,7 +10014,7 @@ else
                                 else
                                     CONN_h.menus.m_results.design.Ytitle{nsource,ncondition}=sprintf('%s @ %s',CONN_x.vvAnalyses(CONN_x.vvAnalysis).measures{nsources(nsource)},CONN_x.Setup.conditions.names{nconditions(ncondition)});
                                 end
-                                try, CONN_h.menus.m_results.Y=spm_vol(char(filename));
+                                try, CONN_h.menus.m_results.Y=conn_fileutils('spm_vol',char(filename));
                                 catch,
                                     CONN_h.menus.m_results.y.data=[];
                                     conn_msgbox({'Not ready to display second-level Analyses',' ',sprintf('Condition (%s) has not been processed yet. Please re-run previous step (First-level analyses)',sprintf('%s ',CONN_x.Setup.conditions.names{nconditions(ncondition)})),'or selet a different first-level analysis to continue'},'',2);
@@ -9700,21 +10039,21 @@ else
                                 end
                                 if conn_surf_dimscheck(CONN_h.menus.m_results.Y(1).dim), %if isequal(CONN_h.menus.m_results.Y(1).dim,conn_surf_dims(8).*[1 1 2])
                                     if CONN_h.menus.m_results_surfhires
-                                        temp=spm_read_vols(CONN_h.menus.m_results.Y);
+                                        temp=conn_fileutils('spm_read_vols',CONN_h.menus.m_results.Y);
                                         temp=permute(temp,[4,1,2,3]);
                                         temp=temp(:,:);
                                     else
                                         tempxyz1=CONN_h.menus.m_results.y.xyz;
                                         tempxyz1(3,:)=1;
-                                        temp1=spm_get_data(CONN_h.menus.m_results.Y,tempxyz1);
+                                        temp1=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,tempxyz1);
                                         tempxyz2=CONN_h.menus.m_results.y.xyz;
                                         tempxyz2(3,:)=conn_surf_dims(8)*[0;0;1]+1;
-                                        temp2=spm_get_data(CONN_h.menus.m_results.Y,tempxyz2);
+                                        temp2=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,tempxyz2);
                                         temp=[temp1(:,CONN_gui.refs.surf.default2reduced) temp2(:,CONN_gui.refs.surf.default2reduced)];
                                     end
                                 else
                                     CONN_h.menus.m_results.y.xyz(3,:)=CONN_h.menus.m_results.y.slice;
-                                    temp=spm_get_data(CONN_h.menus.m_results.Y,CONN_h.menus.m_results.y.xyz);
+                                    temp=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,CONN_h.menus.m_results.y.xyz);
                                 end
                                 
                                 %                             [temp,CONN_h.menus.m_results.y.idx]=conn_get_slice(CONN_h.menus.m_results.Y,CONN_h.menus.m_results.y.slice);
@@ -9744,7 +10083,7 @@ else
                         %                     CONN_h.menus.m_results.se.data=sqrt(CONN_h.menus.m_results.se.data);
                         CONN_h.menus.m_results.XS=CONN_gui.refs.canonical.V;
                         xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_results.Y(1).dim(1:2))*(CONN_h.menus.m_results.y.slice-1)+(1:prod(CONN_h.menus.m_results.Y(1).dim(1:2))),CONN_h.menus.m_results.Y(1).mat,CONN_h.menus.m_results.Y(1).dim);
-                        txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=spm_sample_vol(CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
+                        txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=conn_fileutils('spm_sample_vol',CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
                         CONN_h.menus.m_results.Xs=permute(reshape(CONN_h.menus.m_results.Xs,CONN_h.menus.m_results.Y(1).dim(1:2)),[2,1,3]);
                         CONN_h.menus.m_results.Xs=(CONN_h.menus.m_results.Xs/max(CONN_h.menus.m_results.Xs(:))).^3;
                         set(CONN_h.screen.hfig,'pointer','arrow');
@@ -9762,7 +10101,9 @@ else
                         else
                             filename=fullfile(filepathresults,['BETA_Subject',num2str(1,'%03d'),'_Condition',num2str(CONN_h.menus.m_results.icondition(nconditions(1)),'%03d'),'_Measure',num2str(CONN_h.menus.m_results.outcomeisource(nsources(1)),'%03d'),'_Component',num2str(CONN_h.menus.m_results.outcomencompsource(nsources(1)),'%03d'),'.nii']);
                         end
-                        CONN_h.menus.m_results.Y=spm_vol(char(filename));
+                        if conn_existfile(filename), CONN_h.menus.m_results.Y=conn_fileutils('spm_vol',char(filename));
+                        else CONN_h.menus.m_results.Y=CONN_gui.refs.canonical.V;
+                        end
                         if ~isfield(CONN_h.menus.m_results.y,'slice')||CONN_h.menus.m_results.y.slice<1||CONN_h.menus.m_results.y.slice>CONN_h.menus.m_results.Y(1).dim(3), CONN_h.menus.m_results.y.slice=ceil(CONN_h.menus.m_results.Y(1).dim(3)/2); end
                         [ndgridx,ndgridy]=ndgrid(1:CONN_h.menus.m_results.Y(1).dim(1),1:CONN_h.menus.m_results.Y(1).dim(2));
                         CONN_h.menus.m_results.y.xyz=[ndgridx(:),ndgridy(:),ones(numel(ndgridx),2)]';
@@ -9772,7 +10113,7 @@ else
                         CONN_h.menus.m_results.y.MDok=[];%conn_checkmissingdata(state,nconditions,nsources);
                         CONN_h.menus.m_results.XS=CONN_gui.refs.canonical.V;
                         xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_results.Y(1).dim(1:2))*(CONN_h.menus.m_results.y.slice-1)+(1:prod(CONN_h.menus.m_results.Y(1).dim(1:2))),CONN_h.menus.m_results.Y(1).mat,CONN_h.menus.m_results.Y(1).dim);
-                        txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=spm_sample_vol(CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
+                        txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=conn_fileutils('spm_sample_vol',CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
                         CONN_h.menus.m_results.Xs=permute(reshape(CONN_h.menus.m_results.Xs,CONN_h.menus.m_results.Y(1).dim(1:2)),[2,1,3]);
                         CONN_h.menus.m_results.Xs=(CONN_h.menus.m_results.Xs/max(CONN_h.menus.m_results.Xs(:))).^3;
                         CONN_h.menus.m_results.design.Y={};
@@ -10009,7 +10350,7 @@ else
                                          else
                                              CONN_h.menus.m_results.design.Ytitle{nsource,ncondition}=sprintf('%s @ %s',CONN_x.vvAnalyses(CONN_x.vvAnalysis).measures{nsources(nsource)},CONN_x.Setup.conditions.names{nconditions(ncondition)});
                                          end
-                                         try, CONN_h.menus.m_results.Y=spm_vol(char(filename));
+                                         try, CONN_h.menus.m_results.Y=conn_fileutils('spm_vol',char(filename));
                                          catch,
                                              CONN_h.menus.m_results.y.data=[];
                                              conn_msgbox({'Not ready to display second-level Analyses',' ',sprintf('Condition (%s) has not been processed yet. Please re-run previous step (First-level analyses)',sprintf('%s ',CONN_x.Setup.conditions.names{ncondition})),'or selet a different first-level analysis to continue'},'',2);
@@ -10033,21 +10374,21 @@ else
                                      end
                                      if conn_surf_dimscheck(CONN_h.menus.m_results.Y(1).dim), %if isequal(CONN_h.menus.m_results.Y(1).dim,conn_surf_dims(8).*[1 1 2])
                                          if CONN_h.menus.m_results_surfhires
-                                             temp=spm_read_vols(CONN_h.menus.m_results.Y);
+                                             temp=conn_fileutils('spm_read_vols',CONN_h.menus.m_results.Y);
                                              temp=permute(temp,[4,1,2,3]);
                                              temp=temp(:,:);
                                          else
                                              tempxyz1=CONN_h.menus.m_results.y.xyz;
                                              tempxyz1(3,:)=1;
-                                             temp1=spm_get_data(CONN_h.menus.m_results.Y,tempxyz1);
+                                             temp1=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,tempxyz1);
                                              tempxyz2=CONN_h.menus.m_results.y.xyz;
                                              tempxyz2(3,:)=conn_surf_dims(8)*[0;0;1]+1;
-                                             temp2=spm_get_data(CONN_h.menus.m_results.Y,tempxyz2);
+                                             temp2=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,tempxyz2);
                                              temp=[temp1(:,CONN_gui.refs.surf.default2reduced) temp2(:,CONN_gui.refs.surf.default2reduced)];
                                          end
                                      else
                                          CONN_h.menus.m_results.y.xyz(3,:)=CONN_h.menus.m_results.y.slice;
-                                         temp=spm_get_data(CONN_h.menus.m_results.Y,CONN_h.menus.m_results.y.xyz);
+                                         temp=conn_fileutils('spm_get_data',CONN_h.menus.m_results.Y,CONN_h.menus.m_results.y.xyz);
                                      end
                                      for nc1=find(c(:,nsource))',
                                          for nd1=find(d(:,ncondition))'
@@ -10079,7 +10420,7 @@ else
 %                              CONN_h.menus.m_results.se.data=sqrt(CONN_h.menus.m_results.se.data);
                              if varargin{2}==15||varargin{2}==18,
                                  xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_results.Y(1).dim(1:2))*(CONN_h.menus.m_results.y.slice-1)+(1:prod(CONN_h.menus.m_results.Y(1).dim(1:2))),CONN_h.menus.m_results.Y(1).mat,CONN_h.menus.m_results.Y(1).dim);
-                                 txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=spm_sample_vol(CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
+                                 txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=conn_fileutils('spm_sample_vol',CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
                                  CONN_h.menus.m_results.Xs=permute(reshape(CONN_h.menus.m_results.Xs,CONN_h.menus.m_results.Y(1).dim(1:2)),[2,1,3]);
                                  CONN_h.menus.m_results.Xs=(CONN_h.menus.m_results.Xs/max(CONN_h.menus.m_results.Xs(:))).^3;
                                  set(CONN_h.menus.m_results_00{15},'min',1,'max',CONN_h.menus.m_results.Y(1).dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_results.Y(1).dim(3)-1)),'value',CONN_h.menus.m_results.y.slice);
@@ -10112,7 +10453,7 @@ else
                              end
                              if varargin{2}==15||varargin{2}==18,
                                  xyz=conn_convertcoordinates('idx2tal',prod(CONN_h.menus.m_results.Y(1).dim(1:2))*(CONN_h.menus.m_results.y.slice-1)+(1:prod(CONN_h.menus.m_results.Y(1).dim(1:2))),CONN_h.menus.m_results.Y(1).mat,CONN_h.menus.m_results.Y(1).dim);
-                                 txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=spm_sample_vol(CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
+                                 txyz=pinv(CONN_h.menus.m_results.XS(1).mat)*xyz'; CONN_h.menus.m_results.Xs=conn_fileutils('spm_sample_vol',CONN_h.menus.m_results.XS(1),txyz(1,:),txyz(2,:),txyz(3,:),1);
                                  CONN_h.menus.m_results.Xs=permute(reshape(CONN_h.menus.m_results.Xs,CONN_h.menus.m_results.Y(1).dim(1:2)),[2,1,3]);
                                  CONN_h.menus.m_results.Xs=(CONN_h.menus.m_results.Xs/max(CONN_h.menus.m_results.Xs(:))).^3;
                                  set(CONN_h.menus.m_results_00{15},'min',1,'max',CONN_h.menus.m_results.Y(1).dim(3),'sliderstep',min(.5,[1,10]/(CONN_h.menus.m_results.Y(1).dim(3)-1)),'value',CONN_h.menus.m_results.y.slice);
@@ -10604,7 +10945,8 @@ else
                             CONN_x.gui=1;
                             model=1;
                         else
-                            conn_displayroi('init','results_roi');
+                            conn gui_results_roiview;
+                            %conn_displayroi('init','results_roi');
                             modelroi=1;
                         end
                     case 47,
@@ -10786,7 +11128,7 @@ else
                             if CONN_x.Results.xX.displayvoxels==1
                                 [foldername,foldername_back]=conn_resultsfolder('subjectsconditions',state,CONN_x.Results.xX.nsubjecteffects,CONN_x.Results.xX.csubjecteffects,CONN_x.Results.xX.nconditions,CONN_x.Results.xX.cconditions);
                                 for nfolderbak=1:numel(foldername_back),
-                                    if isdir(fullfile(CONN_x.folders.secondlevel,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
+                                    if conn_fileutils('isdir',fullfile(CONN_x.folders.secondlevel,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
                                 end
                                 resultsfolder=fullfile(CONN_x.folders.secondlevel,foldername);
                                 if state==2
@@ -10800,22 +11142,22 @@ else
                                 end
                                 [foldername,foldername_back]=conn_resultsfolder('sources',state,sources,nsources,csources);
                                 for nfolderbak=1:numel(foldername_back),
-                                    if isdir(fullfile(resultsfolder,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
+                                    if conn_fileutils('isdir',fullfile(resultsfolder,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
                                 end
                                 resultsfolder=fullfile(resultsfolder,foldername);
                                 %disp(resultsfolder);
                                 p=[];h=[];F=[];statsname=[];dof=[];
                                 CONN_h.menus.m_results.design.pwd=resultsfolder;
-                                if conn_existfile(fullfile(resultsfolder,'spmF_mv.nii')), 
-                                    tvol=spm_vol(fullfile(resultsfolder,'spmF_mv.nii'));
+                                if conn_existfile(fullfile(resultsfolder,'spmF_mv.nii'))&conn_existfile(fullfile(resultsfolder,'spmF_mv.json')), 
+                                    tvol=conn_fileutils('spm_vol',fullfile(resultsfolder,'spmF_mv.nii'));
                                     [tx,ty,tz]=ndgrid(1:CONN_h.menus.m_results.Y(1).dim(1),1:CONN_h.menus.m_results.Y(1).dim(2),1:CONN_h.menus.m_results.Y(1).dim(3)); txyz=[tx(:) ty(:) tz(:) ones(numel(tx),1)]';
-                                    SPM.xX_multivariate.F=reshape(spm_get_data(tvol,pinv(tvol(1).mat)*CONN_h.menus.m_results.Y(1).mat*txyz),[1,1,CONN_h.menus.m_results.Y(1).dim]);
+                                    SPM.xX_multivariate.F=reshape(conn_fileutils('spm_get_data',tvol,pinv(tvol(1).mat)*CONN_h.menus.m_results.Y(1).mat*txyz),[1,1,CONN_h.menus.m_results.Y(1).dim]);
                                     SPM.xX_multivariate.h=SPM.xX_multivariate.F;
                                     info=conn_jsonread(fullfile(resultsfolder,'spmF_mv.json'));
                                     SPM.xX_multivariate.statsname=info.statsname;
                                     SPM.xX_multivariate.dof=info.dof;
                                 elseif conn_existfile(fullfile(resultsfolder,'SPM.mat'))
-                                    load(fullfile(resultsfolder,'SPM.mat'),'SPM');
+                                    SPM=struct; conn_loadmatfile(fullfile(resultsfolder,'SPM.mat'),'SPM');
                                 end
                                 try
                                     dof=SPM.xX_multivariate.dof;
@@ -10934,7 +11276,7 @@ else
                                 set(CONN_h.menus.m_results_00{46},'string','display results');
                                 conn_callbackdisplay_secondlevelclick;
                                 %set([CONN_h.menus.m_results_00{15}],'visible','on');
-                                hc1=uicontextmenu(CONN_h.screen.hfig);uimenu(hc1,'Label','Change background anatomical image','callback','conn(''background_image'');conn gui_results;');uimenu(hc1,'Label','Change background reference rois','callback','conn(''background_rois'');');set(CONN_h.menus.m_results_00{14}.h2,'uicontextmenu',hc1);
+                                hc1=uicontextmenu('parent',CONN_h.screen.hfig);uimenu(hc1,'Label','Change background anatomical image','callback','conn(''background_image'');conn gui_results;');uimenu(hc1,'Label','Change background reference rois','callback','conn(''background_rois'');');set(CONN_h.menus.m_results_00{14}.h2,'uicontextmenu',hc1);
                                 conn_menu('updatecscale',[],[],CONN_h.menus.m_results_00{14}.h9);
                                 if CONN_x.Results.xX.displayvoxels==1, 
                                     set(CONN_h.menus.m_results_00{14}.h10,'string','1'); 
@@ -11000,18 +11342,18 @@ else
             if modelroi&&state==1&&CONN_x.Results.xX.displayvoxels==1, % ROI-level (from disk)
                 [foldername,foldername_back]=conn_resultsfolder('subjectsconditions',state,CONN_x.Results.xX.nsubjecteffects,CONN_x.Results.xX.csubjecteffects,CONN_x.Results.xX.nconditions,CONN_x.Results.xX.cconditions);
                 for nfolderbak=1:numel(foldername_back),
-                    if isdir(fullfile(CONN_x.folders.secondlevel,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
+                    if conn_fileutils('isdir',fullfile(CONN_x.folders.secondlevel,foldername_back{nfolderbak})), foldername=foldername_back{nfolderbak}; break; end % backwards-compatibility with existing results
                 end
                 resultsfolder=fullfile(CONN_x.folders.secondlevel,foldername);
                 CONN_h.menus.m_results.design.pwd=resultsfolder;
                 if conn_existfile(fullfile(resultsfolder,'ROI.mat'))
                     try
-                        load(fullfile(resultsfolder,'ROI.mat'),'summary');
+                        summary=struct; conn_loadmatfile(fullfile(resultsfolder,'ROI.mat'),'summary');
                         tfields=fieldnames(summary.results); for n1=1:numel(tfields), CONN_h.menus.m_results.(tfields{n1})=summary.results.(tfields{n1}); end
                         tfields=fieldnames(summary.design); for n1=1:numel(tfields), CONN_h.menus.m_results.design.(tfields{n1})=summary.design.(tfields{n1}); end
                         CONN_h.menus.m_results.design.pwd=resultsfolder;
                     catch
-                        load(fullfile(resultsfolder,'ROI.mat'),'ROI');
+                        ROI=struct; conn_loadmatfile(fullfile(resultsfolder,'ROI.mat'),'ROI');
                         F=cat(1,ROI.F);
                         p=cat(1,ROI.p);
                         dof=cat(1,ROI.dof);
@@ -11424,7 +11766,24 @@ else
             end
 		
         case 'gui_results_roiview',
-            conn_displayroi('init','results_roi'); %CONN_x.Results.xX.nsources,-1);
+            if ~isstruct(CONN_x.gui), CONN_x.gui=struct; end
+            if ~isfield(CONN_x.gui,'display_results')||CONN_x.gui.display_results, dodisp=true;
+            else dodisp=false;
+            end
+            CONN_x.gui.display=true;
+            if conn_existfile(fullfile(CONN_h.menus.m_results.design.pwd,'ROI.mat'))
+                REDO=conn_questdlg('','results explorer','Load existing analysis results', 'Recompute/overwrite results', 'Load existing analysis results');
+                if isempty(REDO), CONN_x.gui=1; set(CONN_h.screen.hfig,'pointer','arrow'); return; end
+                if strcmp(lower(REDO),'recompute/overwrite results'),
+                    CONN_x.gui.overwrite='yes';
+                    conn_process('results_roi'); 
+                end
+            else
+                CONN_x.gui.overwrite='no';
+                conn_process('results_roi');
+            end
+            if dodisp, fh=conn_display(fullfile(CONN_h.menus.m_results.design.pwd,'ROI.mat'),1); end
+            CONN_x.gui=1;
             return
 
         case 'gui_results_roi3d'
@@ -11446,7 +11805,26 @@ else
             %if ~CONN_x.Setup.normalized, warndlg('Second-level voxel-level analyses not available for non-normalized data'); return; end
             if CONN_x.Results.xX.modeltype==2, conn_msgbox('Second-level fixed-effects voxel-level analyses not implemented','',2); return; end
             CONN_x.Results.foldername='';
-            conn_process('results_voxel','readsingle','seed-to-voxel');
+            % CONN_h.menus.m_results.design.pwd
+            % CONN_x.gui.overwrite
+            if ~isstruct(CONN_x.gui), CONN_x.gui=struct; end
+            if ~isfield(CONN_x.gui,'display_results')||CONN_x.gui.display_results, dodisp=true;
+            else dodisp=false;
+            end
+            CONN_x.gui.display=true;
+            if conn_existfile(fullfile(CONN_h.menus.m_results.design.pwd,'SPM.mat'))
+                REDO=conn_questdlg('','results explorer','Load existing analysis results', 'Recompute/overwrite results', 'Load existing analysis results');
+                if isempty(REDO), CONN_x.gui=1; set(CONN_h.screen.hfig,'pointer','arrow'); return; end
+                if strcmp(lower(REDO),'recompute/overwrite results'),
+                    CONN_x.gui.overwrite='yes';
+                    conn_process('results_voxel','dosingle','seed-to-voxel');
+                end
+            else
+                CONN_x.gui.overwrite='no';
+                conn_process('results_voxel','dosingle','seed-to-voxel');
+            end
+            if dodisp, fh=conn_display(fullfile(CONN_h.menus.m_results.design.pwd,'SPM.mat'),1); end
+            CONN_x.gui=1;
             set(CONN_h.screen.hfig,'pointer','arrow');
             
         case 'gui_results_graphtheory',
@@ -11590,6 +11968,7 @@ catch me
             h.button4=uicontrol(h.fig,'style','pushbutton','units','norm','position',[.7 .05 .2 .2],'string','Continue','callback','delete(gcbf)');
             set(h.button1,'userdata',h,'callback','h=get(gcbo,''userdata'');set(h.fig,''position'',get(h.fig,''position'')+[0,0,0,.3]);set(h.button1,''visible'',''off'');set(h.edit1,''position'',[.1 .30 .8 .65],''visible'',''on'');set(h.edit2,''position'',[.1 .12 .8 .18]);set(h.button2,''position'',[.1 .025 .25 .07]);set(h.button3,''position'',[.4 .025 .25 .07]);set(h.button4,''position'',[.7 .025 .2 .07]);');
         end
+        try, if isfield(CONN_gui,'isremote')&&CONN_gui.isremote, conn_tcpip('clear'); end; end
     end
 end
 
@@ -11633,7 +12012,8 @@ for n1=1:numel(CONN_x.Analyses), vars(:,end+1)={['First-level S2V/R2R ',CONN_x.A
 for n1=1:numel(CONN_x.vvAnalyses), vars(:,end+1)={['First-level V2V ',CONN_x.vvAnalyses(n1).name]; 4; {CONN_x.vvAnalyses(n1).name}; {}}; end
 for n1=1:numel(CONN_x.dynAnalyses), vars(:,end+1)={['First-level dyn-ICA ',CONN_x.dynAnalyses(n1).name]; 5; {CONN_x.dynAnalyses(n1).name}; {}}; end
 for n1=1:numel(CONN_x.Analyses), 
-    if ismember(CONN_x.Analyses(n1).type,[2,3]), vars(:,end+1)={[CONN_x.Analyses(n1).name,' (Seed-to-Voxel)']; 6; {'dosingle','seed-to-voxel',CONN_x.Analyses(n1).name}; CONN_x.Analyses(n1).sources}; end; 
+    if isfield(CONN_x.Analyses(n1),'sources')&&~isempty(CONN_x.Analyses(n1).sources),tsources=CONN_x.Analyses(n1).sources; else tsources={}; end
+    if ismember(CONN_x.Analyses(n1).type,[2,3]), vars(:,end+1)={[CONN_x.Analyses(n1).name,' (Seed-to-Voxel)']; 6; {'dosingle','seed-to-voxel',CONN_x.Analyses(n1).name}; tsources}; end; 
     if ismember(CONN_x.Analyses(n1).type,[1,3]), vars(:,end+1)={[CONN_x.Analyses(n1).name,' (ROI-to-ROI)']; 7; {CONN_x.Analyses(n1).name}; {}}; end;
 end
 for n1=1:numel(CONN_x.vvAnalyses), vars(:,end+1)={[CONN_x.vvAnalyses(n1).name]; 6; {'dosingle','voxel-to-voxel',CONN_x.vvAnalyses(n1).name}; conn_v2v('cleartext',CONN_x.vvAnalyses(n1).measures)}; end
@@ -11657,7 +12037,7 @@ ht4j=uicontrol(thfig,'style','listbox','units','norm','position',[.65,.7,.3,.2],
 ht4i=uicontrol(thfig,'style','checkbox','units','norm','position',[.4,.7,.24,.10],'string','Current sources','value',1,'fontsize',8+CONN_gui.font_offset,'backgroundcolor','w','userdata',{ht4j,ht4d,vars(4,:)},'callback','h=get(gcbo,''userdata'');if get(gcbo,''value''), set(h{1},''visible'',''off''); else h{3}=h{3}{get(h{2},''value'')}; if isempty(h{3}), set(h{1},''visible'',''off''); else, set(h{1},''visible'',''on'',''string'',h{3}); end; end');
 if dosecondlevel, set(ht4d,'userdata',{ht4j,ht4i,vars(4,:)},'callback','h=get(gcbo,''userdata''); h{3}=h{3}{get(gcbo,''value'')}; if isempty(h{3}), set([h{1},h{2}],''visible'',''off''); else set(h{2},''visible'',''on''); set(h{1},''string'',h{3}); if get(h{2},''value''), set(h{1},''visible'',''off''); else , set(h{1},''visible'',''on''); end; end'); end
 
-hc1=uicontextmenu(thfig);uimenu(hc1,'Label','select group (2nd-level covariate)','callback',@(varargin)conn_menu_selectsubjects(ht4f)); set(ht4f,'uicontextmenu',hc1);
+hc1=uicontextmenu('parent',thfig);uimenu(hc1,'Label','select group (2nd-level covariate)','callback',@(varargin)conn_menu_selectsubjects(ht4f)); set(ht4f,'uicontextmenu',hc1);
 if multipleoption, condsoption=false; end
 if ~stepsoption, set([ht2a,ht2b,ht2c,ht2d],'enable','off'); end
 if ~all(islogical(condsoption)), set(ht4b,'value',condsoption); 
@@ -11687,7 +12067,15 @@ if paroption,
     elseif 1, tvalid=tidx; % show only default profile
     else tstr{tidx}=sprintf('<HTML><b>%s</b></HTML>',tstr{tidx}); % show all profiles
     end
-    ht0=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.16,.8,.08],'string',[{'local processing (run on this computer)' 'queue/script it (save as scripts to be run later)'} tstr(tvalid)],'value',1,'fontsize',8+CONN_gui.font_offset); 
+    toptions=[{'local processing (run on this computer)' 'queue/script it (save as scripts to be run later)'} tstr(tvalid)];
+    if CONN_gui.isremote
+        info=conn_server('HPC_info');
+        if isfield(info,'host')&&~isempty(info.host), tnameserver=info.host;
+        else tnameserver='CONN server';
+        end
+        toptions=regexprep(toptions,'\<run on (this computer)?',['run on ',tnameserver,' ']);
+    end
+    ht0=uicontrol(thfig,'style','popupmenu','units','norm','position',[.1,.16,.8,.08],'string',toptions,'value',1,'fontsize',8+CONN_gui.font_offset); 
 end
 uicontrol(thfig,'style','pushbutton','string','Start','units','norm','position',[.1,.01,.38,.13],'callback','uiresume','fontsize',9+CONN_gui.font_offset);
 uicontrol(thfig,'style','pushbutton','string','Cancel','units','norm','position',[.51,.01,.38,.13],'callback','delete(gcbf)','fontsize',9+CONN_gui.font_offset);
@@ -11704,9 +12092,9 @@ if ok
     conn_disp('fprintf','      %s\n',tstr{get(ht1,'value')});
     if ~isempty(ht5)
         if isequal(get(ht5,'value'),0)||isempty(get(ht5,'userdata')), 
-            CONN_x.gui.display=0;
+            CONN_x.gui.display_results=0;
         else
-            CONN_x.gui.display=1;
+            CONN_x.gui.display_results=1;
             CONN_x.gui.display_options={};
             val=get(ht5,'userdata');
             if any(ismember(val,[5,6]))&~any(ismember(val,[2,3,4])), val=[val(:)' 2]; end
@@ -11887,12 +12275,12 @@ if isempty(pos), return; end
 try
     if isempty(CONN_h.menus.m_setup.functional_vol), 
         hmsg=conn_msgbox('Initializing timeseries plots... please wait','',-1);
-        CONN_h.menus.m_setup.functional_vol=spm_vol(CONN_h.menus.m_setup.functional{1}); 
+        CONN_h.menus.m_setup.functional_vol=conn_fileutils('spm_vol',CONN_h.menus.m_setup.functional{1}); 
         if ishandle(hmsg), delete(hmsg); end
     end
     mat=CONN_h.menus.m_setup.functional{3}(1).mat;
     txyz=pinv(mat)*[pos(1:3);1];
-    data=spm_get_data(CONN_h.menus.m_setup.functional_vol,txyz);
+    data=conn_fileutils('spm_get_data',CONN_h.menus.m_setup.functional_vol,txyz);
     conn_menu('updateplotstackcenter',CONN_h.menus.m_setup_00{8},data);
     txt=sprintf('(%d,%d,%d)',pos(1),pos(2),pos(3));
     set(CONN_h.menus.m_setup_00{8}.h3,'visible','on','ytick',0,'yticklabel',{txt},'ycolor',.5*[1 1 1],'box','off');
@@ -12189,12 +12577,17 @@ if ~ok, CONN_gui.background_handle=[]; end;
 if ~ok, CONN_gui.background_handle=image(shiftdim(CONN_gui.backgroundcolor,-1),'parent',ha); end % fig print bug?
 %if ~ok, CONN_gui.background_handle=image(max(0,min(1,conn_bsxfun(@plus,(.85-mean(CONN_gui.backgroundcolor))*.2*[zeros(1,128) sin(linspace(0,pi,128)).^2 zeros(1,128)]',shiftdim(CONN_gui.backgroundcolor,-1))))); end
 %if ~ok, CONN_gui.background_handle=image(max(0,min(1,conn_bsxfun(@plus,conn_bsxfun(@times,max(.05,(1-mean(CONN_gui.backgroundcolor))*.1)*[zeros(1,128) sin(linspace(0,pi,128)).^4 zeros(1,128)]',shiftdim(CONN_gui.backgroundcolor/max(.01,mean(CONN_gui.backgroundcolor)),-1)),shiftdim(CONN_gui.backgroundcolor,-1))))); end
-hc1=uicontextmenu(CONN_h.screen.hfig); uimenu(hc1,'label','<HTML>Change GUI font size (<i>Tools.GUI settings</i>)</HTML>','callback','conn(''gui_settings'');'); set(CONN_gui.background_handle,'uicontextmenu',hc1);
+if conn_menumanager('ison')
+    if isfield(CONN_gui,'isremote')&&CONN_gui.isremote, hserver=conn_menu('pushbuttonblue2',[.0,.92,.135,.035],'','reconnecting...','','conn(''gui_server'');');
+    else hserver=[];
+    end
+end
+hc1=uicontextmenu('parent',CONN_h.screen.hfig); uimenu(hc1,'label','<HTML>Change GUI font size (<i>Tools.GUI settings</i>)</HTML>','callback','conn(''gui_settings'');'); set(CONN_gui.background_handle,'uicontextmenu',hc1);
 axis(ha,'tight','off');
 if isfield(CONN_x,'filename')
 %     try
-        if isempty(CONN_x.filename), a=java.io.File(pwd);
-        else a=java.io.File(fileparts(CONN_x.filename));
+        if isempty(CONN_x.filename), a=conn_fileutils('getdiskspace',conn_projectmanager('pwd'));
+        else a=conn_fileutils('getdiskspace',fileparts(CONN_x.filename));
         end
         k1=a.getUsableSpace;
         k2=a.getTotalSpace;
@@ -12217,6 +12610,14 @@ if isfield(CONN_x,'filename')
         set(ht,'horizontalalignment','left','fontsize',8+CONN_gui.font_offset,'color',CONN_gui.fontcolorA,'tag','infoline:text');
         %text(120,(size(c,1))/2,str,'horizontalalignment','left','fontsize',5+CONN_gui.font_offset,'color',[.5 .5 .5]+.0*(mean(CONN_gui.backgroundcolor)<.5));
 %     end
+end
+if conn_menumanager('ison')&&isfield(CONN_gui,'isremote')&&CONN_gui.isremote, 
+    try
+        info=conn_server('HPC_info');
+        if isfield(info,'remote_ip'), set(hserver,'string',sprintf('@ %s',info.remote_ip));
+        else set(hserver,'string',sprintf('@ unknown'));
+        end
+    end
 end
 if conn_menumanager('ison')
     h=conn_menu('pushbutton2',[.74,.0,.016,.02],'','','color theme: light (dark text on light background)','conn(''gui_settings'',''light'');'); set(h,'backgroundcolor','w');
@@ -12262,12 +12663,19 @@ switch(answ)
         CONN_gui.status=1;
         delete(gcbf);
         CONN_x.gui=0;
+        if isfield(CONN_gui,'isremote')&&CONN_gui.isremote, dohpcexit=true; else dohpcexit=false; end
         try
             conn_disp('__exit');
             if isfield(CONN_gui,'originalCOMB'),javax.swing.UIManager.put('ComboBoxUI',CONN_gui.originalCOMB); end
             if isfield(CONN_gui,'originalBORD'),javax.swing.UIManager.put('ToggleButton.border',CONN_gui.originalBORD); end
             if isfield(CONN_gui,'originalLAF'), javax.swing.UIManager.setLookAndFeel(CONN_gui.originalLAF); end
         end
+        CONN_x.filename='';
+        CONN_gui.isremote=0;
+        %CONN_x=[];
+        %CONN_gui=[];
+        CONN_h=[];
+        if dohpcexit, try, conn_server('HPC_exit'); end; end
     otherwise
         conn gui_setup;
 end

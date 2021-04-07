@@ -25,7 +25,7 @@ else
             if numel(temp)==1,temp=cellstr(conn_expandframe(temp{1}));end
             nvols=unique([1 numel(temp)]);
             for nvol=nvols(:)'
-                files=spm_vol(temp{nvol});
+                files=conn_fileutils('spm_vol',temp{nvol});
                 if conn_surf_dimscheck(files), files=conn_surf_parent(files,donewarning); donewarning=''; end % surface
                 if numel(txyz)<=1
                     dim=files(1).dim(1:2);
@@ -35,7 +35,7 @@ else
                     end
                     txyz=files(1).mat*[tx(:) ty(:) zslice+zeros(numel(tx),1) ones(numel(tx),1)]';
                 end
-                dispdata{end+1}=fliplr(flipud(reshape(spm_get_data(files(1),pinv(files(1).mat)*txyz),dim(1:2))'));
+                dispdata{end+1}=fliplr(flipud(reshape(conn_fileutils('spm_get_data',files(1),pinv(files(1).mat)*txyz),dim(1:2))'));
                 if isempty(xlabels)
                     displabel{end+1}=temp{nvol};
                 else
@@ -139,10 +139,16 @@ hc2=uimenu(hc1,'Label','colorscale');
 uimenu(hc2,'Label','colorbar limits','callback',{@conn_montage_display_refresh,'colorscale','rescale'});
 uimenu(hc2,'Label','colorscale direct','callback',{@conn_montage_display_refresh,'colorscale','direct'});
 uimenu(hc2,'Label','colorscale equalized','callback',{@conn_montage_display_refresh,'colorscale','equalize'});
+hc2=uimenu(hc1,'Label','background');
+uimenu(hc2,'Label','white background','callback',{@conn_montage_display_refresh,'background',[1 1 1]});
+uimenu(hc2,'Label','light background','callback',{@conn_montage_display_refresh,'background',[.95 .95 .9]});
+uimenu(hc2,'Label','dark background','callback',{@conn_montage_display_refresh,'background',[.11 .11 .11]});
+uimenu(hc2,'Label','black background','callback',{@conn_montage_display_refresh,'background',[0 0 0]});
 if ~isempty(state.xrois_name)||~isempty(state.x_border_name)||~isempty(state.xcov_name)
     hc2=uimenu(hc1,'Label','fontsize');
     uimenu(hc2,'Label','increase labels fontsize','callback',{@conn_montage_display_refresh,'fontsize','+'});
     uimenu(hc2,'Label','decrease labels fontsize','callback',{@conn_montage_display_refresh,'fontsize','-'});
+    uimenu(hc2,'Label','set labels fontsize','callback',{@conn_montage_display_refresh,'fontsize','?'});
 end
 hc2=uimenu(hc1,'Label','style');
 if ~strcmp(style,'timeseries')
@@ -285,9 +291,10 @@ end
     
     function out=conn_montage_display_refresh(hObject,eventdata,option,varargin)
         out=[];
+        doreset=false;
         if nargin<3||isempty(option), option='refresh'; end
         switch(option)
-            case 'refresh',
+            case 'refresh', doreset=true;
             case 'slider',
             case 'close', state.loop=0; close(state.handles.hfig); return;
             case 'figurehandle', out=state.handles.hfig; return;
@@ -333,6 +340,7 @@ end
                 opt=varargin{1};
                 if isequal(opt,'+'), opt=state.fontsize+1;
                 elseif isequal(opt,'-'), opt=state.fontsize-1;
+                elseif isequal(opt,'?'), opt=inputdlg('Enter fontsize','conn_montage_display',1,{num2str(state.fontsize)}); if ~isempty(opt), opt=str2num(opt{1}); end; if isempty(opt), return; end
                 end
                 state.fontsize=opt;
                 if isfield(state.handles,'scalecov')&&all(ishandle(state.handles.scalecov)), set(state.handles.scalecov,'fontsize',max(1,state.fontsize-3)); end
@@ -437,9 +445,15 @@ end
                     state.datalim=max(abs(state.x(:)));
                     set(state.handles.hfig,'colormap',cmap);
                 end
+            case 'background'
+                value=varargin{1};
+                set([state.handles.slider state.handles.singleloop state.handles.movietitle],'backgroundcolor',value); 
+                set(state.handles.hfig,'color',value);
+                return;
             case 'style',
                 state.loop=0; 
                 state.style=varargin{1};
+                doreset=true;
             case 'getstate',
                 out=state;
                 out=rmfield(out,'handles');
@@ -467,7 +481,7 @@ end
                 state.bookmark_filename=tfilename;
                 state.bookmark_descr=descr;
                 conn_args={fcn,conn_montage_display_refresh([],[],'getstate')}; % re-save to include bookmark info
-                save(conn_prepend('',fullfilename,'.mat'),'conn_args');
+                conn_savematfile(conn_prepend('',fullfilename,'.mat'),'conn_args');
                 if 0, conn_msgbox(sprintf('Bookmark %s saved',fullfilename),'',2);
                 else out=fullfilename;
                 end
@@ -476,14 +490,14 @@ end
         switch(state.style)
             case 'montage'
                 set(state.handles.hax,'position',[0 0 1 1]);
-                set(state.handles.hfig,'color',[0 0 0]);
+                if doreset, set(state.handles.hfig,'color',[0 0 0]); end
                 [state.y,state.nX]=conn_menu_montage(state.handles.hax,state.x);
                 set([state.handles.slider state.handles.startstop state.handles.singleloop state.handles.movietitle state.handles.haxcov state.handles.himcov(:)' state.handles.scalecov(:)' state.handles.refcov(:)'],'visible','off');
                 axis(state.handles.hax,'equal'); 
                 datalim=state.datalim;
             case 'matrix'
                 set(state.handles.hax,'position',[.3 .1 .6 .8]);
-                set(state.handles.hfig,'color',[.95 .95 .9]);
+                if doreset, set(state.handles.hfig,'color',[.95 .95 .9]); end
                 state.slide=round(max(1,min(size(state.x,4), get(state.handles.slider,'value'))));
                 [state.y,state.nX]=conn_menu_montage(state.handles.hax,state.x(:,:,state.slide));
                 if size(state.x,4)>1, set([state.handles.startstop state.handles.singleloop state.handles.haxcov state.handles.himcov(:)' state.handles.scalecov(:)' state.handles.refcov(:)'],'visible','off');
@@ -496,7 +510,7 @@ end
                 elseif ~isempty(state.xcov), set(state.handles.hax,'position',[.05 .3 .90 .65]); 
                 else set(state.handles.hax,'position',[.05 .05 .90 .90]); 
                 end
-                set(state.handles.hfig,'color',[.95 .95 .9]);
+                if doreset, set(state.handles.hfig,'color',[.95 .95 .9]); end
                 if ~isempty(state.xcov), set([state.handles.himcov(:)' state.handles.scalecov(:)' state.handles.refcov(:)'],'visible','on'); end                
                 state.slide=round(max(1,min(size(state.x,4), get(state.handles.slider,'value'))));
                 [state.y,state.nX]=conn_menu_montage(state.handles.hax,state.x(:,:,:,state.slide));
@@ -507,7 +521,7 @@ end
                 if ~isempty(state.xcov), set([state.handles.himcov(:)' state.handles.scalecov(:)' state.handles.refcov(:)'],'visible','on'); set(state.handles.hax,'position',[.2 .3 .6 .55]);
                 else set(state.handles.hax,'position',[.2 .05 .6 .80]);
                 end
-                set(state.handles.hfig,'color',[.95 .95 .9]);
+                if doreset, set(state.handles.hfig,'color',[.95 .95 .9]); end
                 state.slide=1;%round(max(1,min(size(state.x,4), get(state.handles.slider,'value'))));
                 temp=detrend(reshape(state.x(state.xnonzero),[],size(state.x,4))','constant');
                 %temp=temp(:,state.xnonzeroorder);

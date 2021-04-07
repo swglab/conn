@@ -2,7 +2,7 @@ function varargout=conn_disp(varargin)
 % internal function: logged "disp"
 
 global CONN_x CONN_h CONN_gui;
-persistent MAXHISTORY SAVELOG CWCOPY TBSPACE lastdate lastlogfile;
+persistent MAXHISTORY SAVELOG CWCOPY TBSPACE PORTCOMM lastdate lastlogfile;
 
 if isempty(lastdate), lastdate=''; end
 if isempty(lastlogfile), lastlogfile=''; end
@@ -10,6 +10,7 @@ if isempty(MAXHISTORY), MAXHISTORY=1e4; end
 if isempty(SAVELOG), SAVELOG=true; end
 if isempty(CWCOPY), CWCOPY=true; end
 if isempty(TBSPACE), TBSPACE=0; end
+if isempty(PORTCOMM), PORTCOMM=false; end
 silent=false;
 varargout={};
 %try
@@ -31,6 +32,10 @@ if nargin>=1&&ischar(varargin{1})&&size(varargin{1},1)==1&&~isempty(regexp(varar
         case '__tbspace'
             if nargin>1, TBSPACE=varargin{2}; end
             if nargout>0, varargout={TBSPACE}; end
+            return
+        case '__portcomm',
+            if nargin>1, PORTCOMM=varargin{2}; end
+            if nargout>0, varargout={PORTCOMM}; end
             return
         case '__lastdate'
             if nargin>1, lastdate=varargin{2}; end
@@ -70,7 +75,7 @@ if nargin>=1&&ischar(varargin{1})&&size(varargin{1},1)==1&&~isempty(regexp(varar
                 if isfield(CONN_x,'gui')&&(isnumeric(CONN_x.gui)&&CONN_x.gui || isfield(CONN_x.gui,'display')&&CONN_x.gui.display)&&isfield(CONN_h,'screen')&&isfield(CONN_h.screen,'hfig')&&ishandle(CONN_h.screen.hfig)
                     filename=fullfile(conn_prepend('',conn_projectmanager('projectfile'),''),'logfile.txt');
                     if conn_existfile(filename)
-                        str=fileread(filename);
+                        str=conn_fileutils('fileread',filename);
                         str=regexp(str,'[\r\n]+','split');
                         str=[{' '} str];
                         if numel(str)>MAXHISTORY, iscropped=numel(str); str=str(end-MAXHISTORY+1:end); 
@@ -94,13 +99,15 @@ if nargin>=1&&ischar(varargin{1})&&size(varargin{1},1)==1&&~isempty(regexp(varar
     end
 end
 savelog=SAVELOG;
-if ~(isfield(CONN_x,'filename')&&~isempty(CONN_x.filename)&&ischar(CONN_x.filename)&&isfield(CONN_x,'pobj')&&isfield(CONN_x.pobj,'holdsdata')&&CONN_x.pobj.holdsdata), savelog=false; end
+if isfield(CONN_gui,'isremote')&&~isempty(CONN_gui.isremote)&&CONN_gui.isremote>0, savelog=false; end
+if ~(isfield(CONN_x,'filename')&&~isempty(CONN_x.filename)&&ischar(CONN_x.filename)&&isfield(CONN_x,'pobj')&&isfield(CONN_x.pobj,'isextended')&&~CONN_x.pobj.isextended), savelog=false; end
 if isfield(CONN_x,'gui')&&(isnumeric(CONN_x.gui)&&CONN_x.gui || isfield(CONN_x.gui,'display')&&CONN_x.gui.display)&&isfield(CONN_h,'screen')&&isfield(CONN_h.screen,'hfig')&&ishandle(CONN_h.screen.hfig)
     mirrorscreen=true;
     if ~isfield(CONN_h,'screen')||~isfield(CONN_h.screen,'hlog')||~ishandle(CONN_h.screen.hlog),
         pos=get(CONN_h.screen.hfig,'position');
+        fntnames={'Avenir','Helvetica'}; fntname=fntnames{end}; try, ok=ismember(fntnames,listfonts); if nnz(ok), fntname=fntnames{find(ok,1)}; end; end
         CONN_h.screen.hlog=figure('units','pixels','position',[pos(1),1,pos(3),max(200,pos(2))],'color',CONN_gui.backgroundcolor,'doublebuffer','on','tag','conn_logwindow','name','CONN log history','numbertitle','off','menubar','none','resize','on','interruptible','off');
-        CONN_h.screen.hlogstr=uicontrol('units','norm','position',[0 0 1 1],'style','listbox','string',{' '},'horizontalalignment','left','max',2,'keypressfcn',@conn_menu_search,'fontname','monospaced','backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset,'tooltipstring',['<HTML>Log of CONN''s processing and analysis steps<br/> - ',CONN_gui.rightclick,'-click for additional options<br> - note: keyboard shortcuts: ''',CONN_gui.keymodifier,'-F'' finds match to keyword; ''right arrow'' next match; ''left arrow'' previous match; ''',CONN_gui.keymodifier,'-A'' select all</HTML>']);
+        CONN_h.screen.hlogstr=uicontrol('units','norm','position',[0 0 1 1],'style','listbox','string',{' '},'horizontalalignment','left','max',2,'keypressfcn',@conn_menu_search,'fontname',fntname,'backgroundcolor',CONN_gui.backgroundcolor,'foregroundcolor',CONN_gui.fontcolorB,'fontsize',8+CONN_gui.font_offset,'tooltipstring',['<HTML>Log of CONN''s processing and analysis steps<br/> - ',CONN_gui.rightclick,'-click for additional options<br> - note: keyboard shortcuts: ''',CONN_gui.keymodifier,'-F'' finds match to keyword; ''right arrow'' next match; ''left arrow'' previous match; ''',CONN_gui.keymodifier,'-A'' select all</HTML>']);
         set(CONN_h.screen.hlogstr,'units','pixels');
         tpos=get(CONN_h.screen.hlogstr,'position');
         tpos2=get(CONN_h.screen.hlogstr,'extent');
@@ -121,7 +128,7 @@ if isfield(CONN_x,'gui')&&(isnumeric(CONN_x.gui)&&CONN_x.gui || isfield(CONN_x.g
 elseif isfield(CONN_h,'screen')&&isfield(CONN_h.screen,'hlog')&&ishandle(CONN_h.screen.hlog)&&isfield(CONN_h.screen,'hlogstr')&&ishandle(CONN_h.screen.hlogstr), mirrorscreen=true;
 end
 if nargin>=1
-    if mirrorscreen||savelog||nargout>0
+    if mirrorscreen||savelog||PORTCOMM||nargout>0
         if iscell(varargin{1})&&all(cellfun(@ischar,varargin{1}))
             newstr=varargin{1}; newstr=newstr(cellfun('length',newstr)>0);
         elseif ~ischar(varargin{1})
@@ -160,29 +167,44 @@ if nargin>=1
             end
             if savelog&&~isempty(str)
                 try
-                    filepath=conn_prepend('',conn_projectmanager('projectfile'),''); 
-                    filename=fullfile(filepath,'logfile.txt');
-                    try
-                        fh=fopen(filename,'at');
-                    catch
-                        [ok,nill]=mkdir(filepath);
-                        fh=fopen(filename,'at');
+                    if isfield(CONN_x,'pobj')&&isfield(CONN_x.pobj,'holdsdata')&&~CONN_x.pobj.holdsdata&&isfield(CONN_x.pobj,'isextended')&&~CONN_x.pobj.isextended
+                        filename=conn_prepend('',conn_projectmanager('projectfile'),'.log');
+                        filepath=fileparts(filename);
+                    else
+                        filepath=conn_prepend('',conn_projectmanager('projectfile'),'');
+                        filename=fullfile(filepath,'logfile.txt');
                     end
-                    for n=1:numel(str), fprintf(fh,'%s\n',str{n}); end
-                    fclose(fh);
+                    try, 
+                        conn_fileutils('fileappend',filename, str);
+                    catch
+                        conn_fileutils('mkdir',filepath);
+                        conn_fileutils('fileappend',filename, str);
+                    end
+                    %try
+                    %    fh=fopen(filename,'at');
+                    %catch
+                    %    [ok,nill]=mkdir(filepath);
+                    %    fh=fopen(filename,'at');
+                    %end
+                    %for n=1:numel(str), fprintf(fh,'%s\n',str{n}); end
+                    %fclose(fh);
                     if mirrorscreen&&~isequal(lastlogfile,filename), try, set(CONN_h.screen.hlog,'name',sprintf('CONN log history (%s)',filename)); end; end
                     if ~isequal(lastlogfile,filename),
-                        tname=dir(filename);
+                        tname=conn_dirn(filename);
                         if tname.bytes>104857600 % rename if above 100Mb limit
                             newfilename=conn_prepend('',filename,[datestr(now,'_yyyy_mm_dd_HHMMSSFFF'),'.txt']);
-                            if ispc, [ok,msg]=system(sprintf('ren "%s" "%s"',filename,newfilename));
-                            else [ok,msg]=system(sprintf('mv ''%s'' ''%s''',filename,newfilename));
-                            end
+                            try, conn_fileutils('renamefile',filename,newfilename); end
+                            %if ispc, [ok,msg]=system(sprintf('ren "%s" "%s"',filename,newfilename));
+                            %else [ok,msg]=system(sprintf('mv ''%s'' ''%s''',filename,newfilename));
+                            %end
                         end
                     end
                     lastlogfile=filename;
                 end
             elseif ~savelog&&mirrorscreen, try, set(CONN_h.screen.hlog,'name','CONN log history'); end; lastlogfile=''; 
+            end
+            if PORTCOMM&&~isempty(str)
+                conn_tcpip('write',{'status',str});
             end
             if nargout>0&&~isempty(newstr), varargout={newstr}; end
         end

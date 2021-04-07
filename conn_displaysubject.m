@@ -20,7 +20,7 @@ if nargin<1||isempty(datafiles),
     for n=showsubjects(:)',
         if ~isempty(files{n}), 
             try
-                load(files{n},'SPM');
+                SPM=struct; conn_loadmatfile(files{n},'SPM');
                 if isfield(SPM,'xCon'),
                     for n1=1:numel(SPM.xCon),
                         datafiles=[datafiles {fullfile(fileparts(files{n}),SPM.xCon(n1).Vspm.fname)}];
@@ -42,6 +42,7 @@ if nargin<1||isempty(datafiles),
     end
     if isempty(datafiles), return; end
 end
+hmsg=conn_msgbox('Initializing. Please wait...','',-1);
 if ischar(datafiles), datafiles=cellstr(datafiles); end
 if size(datafiles,1)==1, datafiles=datafiles'; end
 [file_path,file_name,file_ext]=cellfun(@fileparts,datafiles,'uni',0);
@@ -50,8 +51,8 @@ if numel(file_name)==1&&strcmp([file_name{1},file_ext{1}],'SPM.mat');
     cwd=pwd;
     spmfile_path=file_path{1};
     if isempty(spmfile_path), spmfile_path='.'; end
-    cd(spmfile_path);
-    load(datafiles{1},'SPM');
+    conn_fileutils('cd',spmfile_path);
+    SPM=struct; conn_loadmatfile(datafiles{1},'SPM');
     idxsubjects=1:size(SPM.xX.X,1);
     if isfield(SPM.xX,'SelectedSubjects'), consubjects=find(SPM.xX.SelectedSubjects); consubjects=consubjects(1+rem(idxsubjects-1,numel(consubjects)));
     else consubjects=idxsubjects;
@@ -64,7 +65,7 @@ if numel(file_name)==1&&strcmp([file_name{1},file_ext{1}],'SPM.mat');
     end
 else
     idxsubjects=1:numel(datafiles);
-    a=spm_vol(datafiles{1});
+    a=conn_fileutils('spm_vol',datafiles{1});
     if conn_surf_dimscheck(a), dispopts={'Surface display'};
     elseif ~isempty(consubjects), dispopts={'Slice display (reference anatomical)','Slice display (own subject anatomical)','Surface display','Volume display','Glass display'};
     else dispopts={'Slice display','Surface display','Volume display','Glass display'};
@@ -73,6 +74,7 @@ else
 end
 if isempty(consubjects), consubjects=nan(size(idxsubjects)); end
 if isempty(datafiles_names), datafiles_names=arrayfun(@(n)sprintf('subject %d',n),consubjects,'uni',0); end
+if ishandle(hmsg), delete(hmsg); end
 ok=true;
 thfig=dialog('units','norm','position',[.3,.4,.3,.3],'windowstyle','normal','name','Plot individual subject','color','w','resize','on');
 uicontrol(thfig,'style','text','units','norm','position',[.1,.85,.8,.10],'string','Display type:','horizontalalignment','left','backgroundcolor','w','fontsize',9+CONN_gui.font_offset,'fontweight','bold');

@@ -1,5 +1,6 @@
 function [data,fileout,fileout2,refinfo]=conn_surf_extract(filename,surfnames,FS_folder,smooth,DODISP,DOSAVE,refinfo,refidxcl)
 
+if nargin<2||isempty(surfnames), surfnames={}; end
 if nargin<3, FS_folder=''; end
 if nargin<4||isempty(smooth), smooth=0; end
 if nargin<5||isempty(DODISP), DODISP=false; end
@@ -8,6 +9,15 @@ if nargin<7||isempty(refinfo), refinfo={}; refinfoinit=true;
 else refinfoinit=false; 
 end
 if nargin<8, refidxcl='all'; end
+
+if any(conn_server('util_isremotefile',filename)), 
+    DODISP=false;
+    [data,fileout,fileout2,refinfo]=conn_server('run',mfilename,conn_server('util_localfile',filename),conn_server('util_localfile',surfnames),conn_server('util_localfile',FS_folder),smooth,DODISP,DOSAVE,refinfo,refidxcl); 
+    fileout=conn_server('util_remotefile',fileout);
+    fileout2=conn_server('util_remotefile',fileout2);
+    return
+end
+
 fileout='';
 fileout2='';
 if isempty(FS_folder) % extracts from single surface file (assumes all files in MNI space)
@@ -36,6 +46,8 @@ if isempty(FS_folder) % extracts from single surface file (assumes all files in 
             return;
         end
     end
+    surfnames_incomplete=cellfun('length',regexp(surfnames,'^lh\.|^rh\.'))>0;
+    if any(surfnames_incomplete), surfnames(surfnames_incomplete)=conn_fullfile(fileparts(which(mfilename)),'utils','surf',surfnames(surfnames_incomplete)); end
     voldata=[];
     if isstruct(filename)&&isfield(filename,'fname'), vol=filename;
     elseif isstruct(filename)&&isfield(filename,'data'), vol=filename.vol; voldata=filename.data;
@@ -72,7 +84,7 @@ if isempty(FS_folder) % extracts from single surface file (assumes all files in 
                 data_ref=A*data_ref; 
                 mdata_ref=A*mdata_ref; 
             end
-            data_ref(mdata_ref<.5)=0;
+            data_ref=data_ref.*(mdata_ref>.10)./max(eps,mdata_ref);
         end
         data{i}=data_ref;
     end
@@ -87,14 +99,14 @@ else % extracts from arbitrary freesurfer surfaces (subject-specific coordinates
             if strcmp(temp2,'mri')||strcmp(temp2,'anat'), FS_folder=temp1; end
         else
             names={'T1.nii','brain.nii','T1.mgh','brain.mgh','T1.mgz','brain.mgz'};
-            if ~(ischar(FS_folder)&&isdir(FS_folder))
+            if ~(ischar(FS_folder)&&conn_fileutils('isdir',FS_folder))
                 [FS_folder,names_name,names_ext]=spm_fileparts(FS_folder);
                 if isempty(FS_folder), FS_folder=pwd; end
                 %names={[names_name,names_ext]};
             end
             [temp1,temp2]=spm_fileparts(FS_folder);
             if strcmp(temp2,'mri')||strcmp(temp2,'anat'), FS_folder=temp1; end
-            valid=cellfun(@(name)~isempty(dir(fullfile(FS_folder,'mri',name))),names);
+            valid=cellfun(@(name)conn_existfile(fullfile(FS_folder,'mri',name)),names);
             if ~any(valid),
                 if ~nargout, error('missing anatomical data');
                 else
@@ -116,7 +128,7 @@ else % extracts from arbitrary freesurfer surfaces (subject-specific coordinates
     end
     alpha=.05:.1:.95;
     DOMEAN=1; % 1:mean; 2:median; 3:mode
-    if nargin<2||isempty(surfnames), surfnames={'.white','.pial','.sphere.reg'}; end
+    if isempty(surfnames), surfnames={'.white','.pial','.sphere.reg'}; end
     resolution=8;
     hems={'lh','rh'};
     voldata=[];
@@ -296,7 +308,7 @@ else % extracts from arbitrary freesurfer surfaces (subject-specific coordinates
             'pinfo',[1;0;0],...
             'dt',[spm_type('float32'),spm_platform('bigend')],...
             'descrip','surface data');
-        if ~isempty(dir(newvol.fname)), try, spm_unlink(newvol.fname); end; end
+        if conn_existfile(newvol.fname), try, spm_unlink(newvol.fname); end; end
         if size(dataraw,1)>1
             newvol=repmat(newvol,[size(dataraw,1),1]);for nh=1:size(dataraw,1),newvol(nh).n=[nh,1];end
             newvol=spm_create_vol(newvol);
@@ -313,7 +325,7 @@ else % extracts from arbitrary freesurfer surfaces (subject-specific coordinates
                 'pinfo',[1;0;0],...
                 'dt',[spm_type('float32'),spm_platform('bigend')],...
                 'descrip','surface data');
-            if ~isempty(dir(newvol.fname)), try, spm_unlink(newvol.fname); end; end
+            if conn_existfile(newvol.fname), try, spm_unlink(newvol.fname); end; end
             if size(dataraw,1)>1
                 newvol=repmat(newvol,[size(data,1),1]);for nh=1:size(data,1),newvol(nh).n=[nh,1];end
                 newvol=spm_create_vol(newvol);

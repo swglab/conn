@@ -80,23 +80,23 @@ function varargout=conn_batch(varargin)
 %                       see secondarydatasets below) 
 %    structurals     : structurals{nsub} char array of structural volume files 
 %                      OR structurals{nsub}{nses} char array of anatomical session-specific volume files 
-%    secondarydatasets  : (for Setup.rois.dataset>0) structure array identifying one or several additional functional 
+%    secondarydatasets  : (for Setup.rois.dataset>0) cell array identifying one or several additional functional 
 %                       datasets (e.g. vdm files for susceptibility distorition, alternative functional files for
 %                       ROI-level timeseries extraction, etc.) (secondary dataset-1 and above); default secondarydatasets
 %                       equal to struct('functionals_type',2)
 %       functionals_label      : (optional) label of secondary functional dataset
-%       functionals_explicit   : (only for functionals_type==4 only) functionals_explicit{nsub}{nses} char array of volume files
+%       functionals_type       : Files in secondary functional dataset (1-4) [2]: 
+%                                 1: same files as Primary dataset
+%                                 2: same files as Primary dataset field after removing leading 's' from filename
+%                                 3: other (same as Primary dataset field but using alternative filename-change rule; 
+%                                       see functionals_rule above and help conn_rulebasedfilename); 
+%                                 4: other (explicitly specify the functional volume files; see functionals_explicit below)
 %       functionals_rule       : (only for functionals_type==3 only) regexprep(filename,functionals_rule{2},functionals_rule{3}) converts 
 %                               filenames in 'Setup.functionals' field to filenames that will be used when extracting BOLD 
 %                               signal ROI timeseries (if functionals_rule{1}==2 filename is interpreted as a full path; if 
 %                               functionals_rule{1}==1 filename is interpreted as only the file *name* -no file path, no 
 %                               file extension-)    
-%       functionals_type       : Location of secondary functional dataset: 
-%                                 1: same files as Primary dataset
-%                                 2: same files as Primary dataset field after removing leading 's' from filename
-%                                 3: other (same as Primary dataset field but using alternative filename-change rule; 
-%                                       see functionals_rule above and help conn_rulebasedfilename); 
-%                                 4: other (explicitly specify the functional volume files; see functionals_explicit above) [2] 
+%       functionals_explicit   : (only for functionals_type==4 only) functionals_explicit{nsub}{nses} char array of volume files
 %    add             : 1/0; use 0 (default) to define the full set of subjects in your experiment; use 1 to define an 
 %                       additional set of subjects (to be added to any already-existing subjects in your project) [0]
 %                      When using Setup.add=1, the following fields are expected to contain the information for the new
@@ -354,7 +354,7 @@ function varargout=conn_batch(varargin)
 %                             in mm); c) *.siemens.txt (Siemens MotionDetectionParameter.txt format); d) *.deg.txt (same 
 %                             as SPM format but rotations in degrees instead of radians)
 %      boundingbox     : (normalization) target bounding box for resliced volumes (mm) [-90,-126,-72;90,90,108] 
-%      bp_filter       : (functional_bandpass) Low- and High- frequency thresholds (in Hz)
+%      bp_filter       : (functional_bandpass, functional_regression) Low- and High- frequency thresholds (in Hz)
 %      bp_keep0        : (functional_bandpass) 0: removes average BOLD signal (freq=0Hz component); 1: keeps average BOLD signal in output 
 %                           independent of band-pass filter values; [1]
 %      coregtomean     : (functional_coregister/segment/normalize) 0: use first volume; 1: use mean volume (computed during 
@@ -370,9 +370,11 @@ function varargout=conn_batch(varargin)
 %                           'functional_load_from_mnispace', 'functional_load_from_surfacespace', 'functional_load_from_smoothed')
 %      reg_names       : (functional_regression) list of first-level covariates to use as model regressors / design matrix (valid entries are 
 %                           first-level covariate names or ROI names)
-%      reg_dimensions  : (functional_regression) list of maximum number of dimensions (one vlaue for each model regressor in reg_names)
-%      reg_deriv       : (functional_regression) list of 0/1/2 values (one value for each model regressorr in reg_names): add first- or 
+%      reg_dimensions  : (functional_regression) list of maximum number of dimensions (one value for each model regressor in reg_names)
+%      reg_deriv       : (functional_regression) list of 0/1/2 values (one value for each model regressor in reg_names): add first- or 
 %                           second- order derivatives to each model regressor
+%      reg_filter       : (functional_regression) list of 0/1 values (one value for each model regressor in reg_names): band-pass filter 
+%                           individual model regressors (filter specified in bp_filter field)
 %      reg_detrend     : (functional_regression) 1: adds a linear/detrending term to model regressors [1]
 %      reg_skip        : (functional_regression) 1: does not create output functional files, only creates session-specific dp_*.txt files 
 %                           with covariate timeseries to be included later in an arbitrary first-level model [0]
@@ -651,8 +653,8 @@ if isfield(batch,'New'), % obsolete functionality / for backwards compatibility 
     if isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0, error('BATCH.New option is not compatible with parallel processing. Please use the newer BATCH.Setup.preprocessing fields instead'); return; end
     conn_disp('Use of BATCH.New for preprocessing is no longer supported and may become obsolete in future releases. Please modify your scripts using BATCH.New to use instead BATCH.Setup.preprocessing (see doc conn_batch for details)'); 
     OPTIONS=struct('RT',2,'FWHM',8,'VOX',2,'CONN_DISPLAY',0,'STRUCTURAL_TEMPLATE',fullfile(fileparts(which('spm')),'templates','T1.nii'),'FUNCTIONAL_TEMPLATE',fullfile(fileparts(which('spm')),'templates','EPI.nii'),'SO',[],'UNWARP',[]);
-    if isempty(dir(OPTIONS.FUNCTIONAL_TEMPLATE)), OPTIONS.FUNCTIONAL_TEMPLATE=fullfile(fileparts(which('spm')),'toolbox','OldNorm','EPI.nii'); end
-    if isempty(dir(OPTIONS.STRUCTURAL_TEMPLATE)), OPTIONS.STRUCTURAL_TEMPLATE=fullfile(fileparts(which('spm')),'toolbox','OldNorm','T1.nii'); end
+    if ~conn_existfile(OPTIONS.FUNCTIONAL_TEMPLATE), OPTIONS.FUNCTIONAL_TEMPLATE=fullfile(fileparts(which('spm')),'toolbox','OldNorm','EPI.nii'); end
+    if ~conn_existfile(OPTIONS.STRUCTURAL_TEMPLATE), OPTIONS.STRUCTURAL_TEMPLATE=fullfile(fileparts(which('spm')),'toolbox','OldNorm','T1.nii'); end
     if isfield(batch,'filename')&&~isempty(batch.filename),OPTIONS.CONN_NAME=batch.filename; end
     if isfield(batch.New,'center')&&~isempty(batch.New.center),OPTIONS.CENTER=batch.New.center;end
     if isfield(batch.New,'reorient')&&~isempty(batch.New.reorient),OPTIONS.REORIENT=batch.New.reorient;end
@@ -686,9 +688,10 @@ PAR_ARG={};
 %% SETUP step
 if isfield(batch,'Setup'),
     if isfield(batch,'filename'),
-        if (isfield(batch.Setup,'isnew')&&batch.Setup.isnew)||isempty(dir(batch.filename)),
+        if (isfield(batch.Setup,'isnew')&&batch.Setup.isnew)||~conn_existfile(batch.filename),
             conn init;                   % initializes CONN_x structure
             %CONN_x.Setup.RT=nan;
+            if ~isempty(batch.filename)&&ischar(batch.filename), [nill,nill,extt]=fileparts(batch.filename); if isempty(extt), batch.filename=[batch.filename,'.mat']; end; end
             CONN_x.filename=batch.filename;
             if conn_existfile(CONN_x.filename), conn_jobmanager('cleardmat'); end
         else
@@ -775,41 +778,49 @@ if isfield(batch,'Setup'),
         localcopy=false; if isfield(batch.Setup,'localcopy')&&batch.Setup.localcopy, localcopy=true; end
         localcopy_reduce=false; if isfield(batch.Setup,'localcopy_reduce')&&batch.Setup.localcopy_reduce, localcopy_reduce=true; end
         for nalt=1:numel(batch.Setup.secondarydatasets)
-            if isfield(batch.Setup.secondarydatasets(nalt),'functionals_type')
-                CONN_x.Setup.secondarydataset(nalt).functionals_type=batch.Setup.secondarydatasets(nalt).functionals_type;
-            elseif isfield(batch.Setup.secondarydatasets(nalt),'roiextract')
-                CONN_x.Setup.secondarydataset(nalt).functionals_type=batch.Setup.secondarydatasets(nalt).roiextract;
+            if iscell(batch.Setup.secondarydatasets), tsecondarydataset=batch.Setup.secondarydatasets{nalt};
+            else tsecondarydataset=batch.Setup.secondarydatasets(nalt);
             end
-            if isfield(batch.Setup.secondarydatasets(nalt),'functionals_rule')
-                CONN_x.Setup.secondarydataset(nalt).functionals_rule=batch.Setup.secondarydatasets(nalt).functionals_rule;
-            elseif isfield(batch.Setup.secondarydatasets(nalt),'roiextract_rule')
-                CONN_x.Setup.secondarydataset(nalt).functionals_rule=batch.Setup.secondarydatasets(nalt).roiextract_rule;
+            ialt=nalt;
+            if isfield(tsecondarydataset,'functionals_rule')
+                CONN_x.Setup.secondarydataset(ialt).functionals_rule=tsecondarydataset.functionals_rule;
+            elseif isfield(tsecondarydataset,'roiextract_rule')
+                CONN_x.Setup.secondarydataset(ialt).functionals_rule=tsecondarydataset.roiextract_rule;
             end
-            if isfield(batch.Setup.secondarydatasets(nalt),'functionals_label')
-                CONN_x.Setup.secondarydataset(nalt).label=batch.Setup.secondarydatasets(nalt).functionals_label;
+            if isfield(tsecondarydataset,'functionals_label')
+                CONN_x.Setup.secondarydataset(ialt).label=tsecondarydataset.functionals_label;
             end
-            if isfield(batch.Setup.secondarydatasets(nalt),'functionals_explicit')||isfield(batch.Setup.secondarydatasets(nalt),'roiextract_functionals')
-                if isfield(batch.Setup.secondarydatasets(nalt),'functionals_explicit'), temp=batch.Setup.secondarydatasets(nalt).functionals_explicit;
-                else temp=batch.Setup.secondarydatasets(nalt).roiextract_functionals;
+            if isfield(tsecondarydataset,'functionals_explicit')||isfield(tsecondarydataset,'roiextract_functionals')
+                if isfield(tsecondarydataset,'functionals_explicit'), temp=tsecondarydataset.functionals_explicit;
+                else temp=tsecondarydataset.roiextract_functionals;
                 end
-                if ~iscell(temp), temp={temp}; end
-                for isub=1:numel(SUBJECTS),
-                    nsub=SUBJECTS(isub);
-                    %CONN_x.Setup.nsessions(nsub)=length(batch.Setup.functionals_explicit{nsub});
-                    if ~iscell(temp{isub}), temp{isub}={temp}; end
-                    for nses=1:CONN_x.Setup.nsessions(nsub),
-                        if localcopy, 
-                            switch(char(CONN_x.Setup.secondarydataset(nalt).label))
-                                case 'fmap', args={'fmap','fmap'}; % copies dataset 'fmap' as .../fmap/*fmap.nii file
-                                case 'vdm',  args={'fmap','vdm'};  % copies dataset 'vdm' as .../fmap/*vdm.nii file
-                                otherwise, args={CONN_x.Setup.secondarydataset(nalt).label,[]}; % copies other datasets as ../dataset<label>/*unknown.nii file
+                if ~isempty(temp)
+                    if ~iscell(temp), temp={temp}; end
+                    for isub=1:numel(SUBJECTS),
+                        nsub=SUBJECTS(isub);
+                        %CONN_x.Setup.nsessions(nsub)=length(batch.Setup.functionals_explicit{nsub});
+                        if ~isempty(temp{isub})
+                            if ~iscell(temp{isub}), temp{isub}={temp}; end
+                            for nses=1:CONN_x.Setup.nsessions(nsub),
+                                if localcopy,
+                                    switch(char(CONN_x.Setup.secondarydataset(ialt).label))
+                                        case 'fmap', args={'fmap','fmap'}; % copies dataset 'fmap' as .../fmap/*fmap.nii file
+                                        case 'vdm',  args={'fmap','vdm'};  % copies dataset 'vdm' as .../fmap/*vdm.nii file
+                                        otherwise, args={CONN_x.Setup.secondarydataset(ialt).label,[]}; % copies other datasets as ../dataset<label>/*unknown.nii file
+                                    end
+                                    [nill,nill,nV]=conn_importvol2bids(temp{isub}{nses},nsub,nses,args{:},[],[],localcopy_reduce);
+                                else conn_set_functional(nsub,nses,ialt,temp{isub}{nses});
+                                end
+                                %[CONN_x.Setup.secondarydataset(ialt).functionals_explicit{nsub}{nses},nV]=conn_file(temp{isub}{nses});
                             end
-                            [nill,nill,nV]=conn_importvol2bids(temp{isub}{nses},nsub,nses,args{:},[],[],localcopy_reduce);
-                        else conn_set_functional(nsub,nses,nalt,temp{isub}{nses});
                         end
-                        %[CONN_x.Setup.secondarydataset(nalt).functionals_explicit{nsub}{nses},nV]=conn_file(temp{isub}{nses});
                     end
                 end
+            end
+            if isfield(tsecondarydataset,'functionals_type')
+                CONN_x.Setup.secondarydataset(ialt).functionals_type=tsecondarydataset.functionals_type;
+            elseif isfield(tsecondarydataset,'roiextract')
+                CONN_x.Setup.secondarydataset(ialt).functionals_type=tsecondarydataset.roiextract;
             end
         end
     end
@@ -1061,7 +1072,7 @@ if isfield(batch,'Setup'),
             if ~isfield(batch.Setup.rois,'names')||length(batch.Setup.rois.names)<n1||isempty(batch.Setup.rois.names{n1}), batch.Setup.rois.names{n1}=name; end % note: need to set names first in case localcopy==1
             if ~isfield(batch.Setup.rois,'dimensions')||length(batch.Setup.rois.dimensions)<n1||isempty(batch.Setup.rois.dimensions{n1}), batch.Setup.rois.dimensions{n1}=1; end
             if ~isfield(batch.Setup.rois,'mask')||length(batch.Setup.rois.mask)<n1, batch.Setup.rois.mask(n1)=0; end
-            if ~isfield(batch.Setup.rois,'multiplelabels')||length(batch.Setup.rois.multiplelabels)<n1, batch.Setup.rois.multiplelabels(n1)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(~isempty(dir(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.txt')))|~isempty(dir(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.csv')))|~isempty(dir(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.xls')))); end
+            if ~isfield(batch.Setup.rois,'multiplelabels')||length(batch.Setup.rois.multiplelabels)<n1, batch.Setup.rois.multiplelabels(n1)=(strcmp(nameext,'.img')|strcmp(nameext,'.nii')|strcmp(nameext,'.mgz'))&(conn_existfile(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.txt'))|conn_existfile(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.csv'))|conn_existfile(conn_prepend('',CONN_x.Setup.rois.files{1}{n0+n1}{1}{1},'.xls'))); end
             if ~isfield(batch.Setup.rois,'regresscovariates')||length(batch.Setup.rois.regresscovariates)<n1, batch.Setup.rois.regresscovariates(n1)=double(batch.Setup.rois.dimensions{n1}>1); end
             if ~isfield(batch.Setup.rois,'weighted')||length(batch.Setup.rois.weighted)<n1, batch.Setup.rois.weighted(n1)=double(batch.Setup.rois.dimensions{n1}==0); end
             if ~isfield(batch.Setup.rois,'dataset')||length(batch.Setup.rois.dataset)<n1, 
@@ -1237,7 +1248,7 @@ if isfield(batch,'Setup'),
     end
     
     if isfield(batch.Setup,'done')&&batch.Setup.done,
-        conn save;
+        if ~conn_projectmanager('inserver')&&~(isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0), conn save; end
         if ~isfield(batch.Setup,'overwrite'), batch.Setup.overwrite='Yes'; end
         if isscalar(batch.Setup.overwrite)&&~isstruct(batch.Setup.overwrite)&&ismember(double(batch.Setup.overwrite),[1 89 121]), batch.Setup.overwrite='Yes'; end
         CONN_x.gui=struct('overwrite',batch.Setup.overwrite,'subjects',SUBJECTS);
@@ -1253,6 +1264,7 @@ if isfield(batch,'Setup'),
     end
 else
     if isfield(batch,'filename'),
+        if ~isempty(batch.filename)&&ischar(batch.filename), [nill,nill,extt]=fileparts(batch.filename); if isempty(extt), batch.filename=[batch.filename,'.mat']; end; end
         CONN_x.filename=batch.filename;
         CONN_x.gui=0;
         conn load;                      % loads existing conn_* project
@@ -1303,7 +1315,7 @@ if isfield(batch,'Denoising'),
     end
     
     if isfield(batch.Denoising,'done')&&batch.Denoising.done,
-        conn save;
+        if ~conn_projectmanager('inserver')&&~(isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0), conn save; end
         if ~isfield(batch.Denoising,'overwrite'), batch.Denoising.overwrite='Yes'; end
         if isscalar(batch.Denoising.overwrite)&&~isstruct(batch.Denoising.overwrite)&&ismember(double(batch.Denoising.overwrite),[1 89 121]), batch.Denoising.overwrite='Yes'; end
         CONN_x.gui=struct('overwrite',batch.Denoising.overwrite,'subjects',SUBJECTS);
@@ -1346,7 +1358,6 @@ if isfield(batch,'Analysis'),
                 CONN_x.Analyses(ianalysis)=struct(...
                  'name','SBC_01',...
                  'sourcenames',{{}},...
-                 'variables', struct('names',{{}},'types',{{}},'deriv',{{}},'fbands',{{}},'dimensions',{{}}),...
                  'regressors',	struct('names',{{}},'types',{{}},'deriv',{{}},'fbands',{{}},'dimensions',{{}}),...
                  'type',3,...
                  'measure',1,...
@@ -1405,7 +1416,7 @@ if isfield(batch,'Analysis'),
     end
     
     if isfield(batch.Analysis,'done')&&batch.Analysis.done,
-        conn save;
+        if ~conn_projectmanager('inserver')&&~(isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0), conn save; end
         if ~isfield(batch.Analysis,'overwrite'), batch.Analysis.overwrite='Yes'; end
         if isscalar(batch.Analysis.overwrite)&&~isstruct(batch.Analysis.overwrite)&&ismember(double(batch.Analysis.overwrite),[1 89 121]), batch.Analysis.overwrite='Yes'; end
         CONN_x.gui=struct('overwrite',batch.Analysis.overwrite,'subjects',SUBJECTS);
@@ -1512,7 +1523,7 @@ if isfield(batch,'vvAnalysis'),
     end
     
     if isfield(batch.vvAnalysis,'done')&&batch.vvAnalysis.done,
-        conn save;
+        if ~conn_projectmanager('inserver')&&~(isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0), conn save; end
         if ~isfield(batch.vvAnalysis,'overwrite'), batch.vvAnalysis.overwrite='Yes'; end
         if isscalar(batch.vvAnalysis.overwrite)&&~isstruct(batch.vvAnalysis.overwrite)&&ismember(double(batch.vvAnalysis.overwrite),[1 89 121]), batch.vvAnalysis.overwrite='Yes'; end
         CONN_x.gui=struct('overwrite',batch.vvAnalysis.overwrite,'subjects',SUBJECTS);
@@ -1578,7 +1589,7 @@ if isfield(batch,'dynAnalysis'),
     else stepname='Analyses_dyn';
     end
     if isfield(batch.dynAnalysis,'done')&&batch.dynAnalysis.done,
-        conn save;
+        if ~conn_projectmanager('inserver')&&~(isfield(batch,'parallel')&&isfield(batch.parallel,'N')&&batch.parallel.N>0), conn save; end
         if ~isfield(batch.dynAnalysis,'overwrite'), batch.dynAnalysis.overwrite='Yes'; end
         if isscalar(batch.dynAnalysis.overwrite)&&~isstruct(batch.dynAnalysis.overwrite)&&ismember(double(batch.dynAnalysis.overwrite),[1 89 121]), batch.dynAnalysis.overwrite='Yes'; end
         CONN_x.gui=struct('overwrite',batch.dynAnalysis.overwrite,'subjects',SUBJECTS);
@@ -1671,11 +1682,14 @@ if isfield(batch,'Results'),
     if ~isfield(batch.Results,'analysis_number')||isempty(batch.Results.analysis_number), batch.Results.analysis_number=1; end
     if ischar(batch.Results.analysis_number)
         if isvv, ianalysis=strmatch(batch.Results.analysis_number,{CONN_x.vvAnalyses.name},'exact');
-        else ianalysis=strmatch(batch.Results.analysis_number,{CONN_x.Analyses.name},'exact');
+        else
+            ianalysis=strmatch(batch.Results.analysis_number,{CONN_x.Analyses.name},'exact');
+            if isempty(ianalysis), isvv=true; ianalysis=strmatch(batch.Results.analysis_number,{CONN_x.vvAnalyses.name},'exact'); end
         end
         if isempty(ianalysis), error('unrecognized analysis %s',batch.Results.analysis_number); end
         batch.Results.analysis_number=ianalysis;
     end
+    if isvv&&isfield(batch.Results,'between_sources')&&~isfield(batch.Results,'between_measures'), batch.Results.between_measures=batch.Results.between_sources; batch.Results=rmfield(batch.Results,'between_sources'); end
     if isvv, CONN_x.vvAnalysis=batch.Results.analysis_number;
     else CONN_x.Analysis=batch.Results.analysis_number;
     end
@@ -1754,11 +1768,11 @@ if isfield(batch,'Results'),
             end
             if ~isvv&&any(CONN_x.Analyses(CONN_x.Analysis).type==[1,3]), % &&isfield(batch.Results,'done')&&batch.Results.done
                 CONN_x.gui=struct('overwrite','Yes');
+                if isfield(batch.Results,'display'), CONN_x.gui.display_results=batch.Results.display; end
                 conn_process('results_roi');
-                if isfield(batch.Results,'display'), CONN_x.gui.display=batch.Results.display; end
                 CONN_x.gui=1;
                 CONN_x.Results.foldername=[];
-                conn save;
+                %conn save;
             end
             
             if isvv
@@ -1789,11 +1803,11 @@ if isfield(batch,'Results'),
                     
                     if 1, %isfield(batch.Results,'done')&&batch.Results.done,
                         CONN_x.gui=struct('overwrite','Yes');
-                        if isfield(batch.Results,'display'), CONN_x.gui.display=batch.Results.display; end
+                        if isfield(batch.Results,'display'), CONN_x.gui.display_results=batch.Results.display; end
                         conn_process('results_voxel','dosingle','voxel-to-voxel');
                         CONN_x.gui=1;
                         CONN_x.Results.foldername=[];
-                        conn save;
+                        %conn save;
                     end
                 end
             else
@@ -1826,11 +1840,11 @@ if isfield(batch,'Results'),
                     
                     if 1, %isfield(batch.Results,'done')&&batch.Results.done,
                         CONN_x.gui=struct('overwrite','Yes');
-                        if isfield(batch.Results,'display'), CONN_x.gui.display=batch.Results.display; end
+                        if isfield(batch.Results,'display'), CONN_x.gui.display_results=batch.Results.display; end
                         conn_process('results_voxel','dosingle','seed-to-voxel');
                         CONN_x.gui=1;
                         CONN_x.Results.foldername=[];
-                        conn save;
+                        %conn save;
                     end
                 end
             end

@@ -285,7 +285,8 @@ ________________________________________________________________________________
      patch to add ability to read subject-specific freesurfer annotation .annot files (thanks to Amy Bouchard for bringing up this issue; https://www.nitrc.org/forum/forum.php?thread_id=10885&forum_id=1144)
      patch to add Yeo2011 7-networks template (in conn/utils/otherrois) as ROI or as template for ICA component identification (spatial match to template) (thanks to Yiquan for suggesting this addition https://www.nitrc.org/forum/message.php?msg_id=28707)
      patch to add 'merge (not-in-union)' option to "conditions tool" menu allowing to compute an exclusive conjunction of several conditions (those scans/timepoints not already covered by one or several other conditions; e.g. to explicitly define a reference/baseline effect from an event related design) (thanks to Alex for suggesting this addition https://www.nitrc.org/forum/forum.php?thread_id=11020&forum_id=1144)
-20.a Cumulative patch, bug fixes and improvements
+20.a (internal distribution only)
+20.b Cumulative patch, bug fixes and improvements
      patch to fix color scaling in R2R display (thanks to Paul Summers for bringing this issue up)
      patch to distributed processing to fix memory problems when merging large number of HPC jobs (thanks to Victoria Okuneye for bringing this issue up)
      Added new interface for defining first-level analyses, including list with most common connectivity analyses/measures and their default options
@@ -303,6 +304,9 @@ ________________________________________________________________________________
      Added more flexible options to Tools.Run.SecondLevelResults menu (single-click run multiple second-level analyses, including different models and different sources/measures)
      Added group-MVPA 'summary' display showing cumulative percent variance in multivoxel patterns explained by group-MVPA components (see second-level results tab)
      Added 'functional_load_from' preprocessing steps to load functional files from a previously-saved secondary dataset (e.g. saved using functional_label_as*, then loaded using functional_load_as*)
+     Updated fmriprep compatibility to fmriprep 20.2.0
+     Added fmriprep options to import data to derivatives/conn folder and read event information from raw-data folders tsv files
+     Added option to ROI-to-ROI results explorer GUI to display/import connectivity values from user-defined masks (e.g. those created using 'export mask' from other second-level analyses)
      
 note: the symbol (*) in any of the lists above indicates changes that users need to pay special attention to when upgrading mid-analysis, as they may produce different results compared to previous versions (users may want to hold update until analyses are finished or take special precautions to ensure continuity; instructions for exact replicability with previous-version analyses are described in each case)
 
@@ -310,11 +314,11 @@ note: the symbol (*) in any of the lists above indicates changes that users need
 
 changes in progress or projected: 
       add simpler options to use alternative reference brain surfaces in 3d displays (e.g. for pediatric or non-human analyses)
+      add integration with CAT12 
       add interoperability with BCT measures
       add interoperability with Matlab NN/ML toolbox
       add voxel-level regressors to second-level analysis options
       add import graph-theory measures as second-level covariates
-      add across-experiments/projects second-level analyses
       add batch.mat second-level analysis file to second-level results folder
       add support for flexible ROIs
       add possibility to share/download neuromarker definitions
